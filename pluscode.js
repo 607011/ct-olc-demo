@@ -1,6 +1,6 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.0';
+  const VERSION = '1.0.1';
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
@@ -39,13 +39,11 @@
     const PADDING_CHARACTER = '0';
   
     return {
-      ALPHABET: ALPHABET,
       RESOLUTION: RESOLUTION,
       LENGTH_NORMAL: CODE_LENGTH_NORMAL,
       LENGTH_EXTRA: CODE_LENGTH_EXTRA,
       GRID_COLS: GRID_COLS,
       GRID_ROWS: GRID_ROWS,
-      DIVISOR: DIVISOR,
       offset: extraPrecisionEnabled => {
         let offset = {
           lat: GRID_SIZE_DEG / 2,
@@ -389,6 +387,8 @@
         this._lonGridLines = [];
         this._divs = [];
         this._labelClass = 'olc-label';
+        this._code1Class = 'code1';
+        this._code2Class = 'code2';
         this._displayLabels = false;
       }
       onAdd() {
@@ -404,14 +404,17 @@
           self._clearLabels();
         }
         this._listeners.push(google.maps.event.addListener(this.getMap(), 'idle',
-        () => {
-          setTimeout(redraw, 20);
+        function() {
+          /* XXX: Dirty hack. When the map is automatically rendered
+          after panning, the DIV overlay seems to retain the offset
+          from the point of time before panning. A slightly deferred
+          rendering solves that problem. */
+          setTimeout(redraw, 50);
         }));
         this._listeners.push(google.maps.event.addListener(this.getMap(), 'zoom_changed', redraw));
         this._listeners.push(google.maps.event.addListener(this.getMap(), 'dragstart', clearLabels));
       }
       onRemove() {
-        console.log('onRemove()');
         this._clear();
         this._listeners.forEach(l => google.maps.event.removeListener(l));
         this._listeners = [];
@@ -435,6 +438,37 @@
           this._clearLabels();
         }
       }
+      get mapTypeId() {
+        return {terrain: 'roadmap', satellite: 'satellite', roadmap: 'roadmap', hybrid: 'satellite'}[this.getMap().getMapTypeId()];
+      }
+      get strokeParams() {
+        return {
+          'satellite': {
+            'major': {
+              color: '#f93',
+              opacity: .9,
+              weight: 1
+            },
+            'minor': {
+              color: '#f93',
+              opacity: .5,
+              weight: .5
+            }
+          },
+          'roadmap': {
+            'major': {
+              color: '#44d',
+              opacity: .35,
+              weight: 1
+            },
+            'minor': {
+              color: '#44d',
+              opacity: .2,
+              weight: .5
+            }
+          }
+        }[this.mapTypeId];
+      }
       _clear() {
         this._clearLabels();
         this._latGridLines.forEach(v => v.setMap(null));
@@ -443,11 +477,13 @@
         this._lonGridLines = [];
       }
       _clearLabels() {
-        let nodes = this.getPanes().overlayLayer.children;
-        let len = nodes.length;
-        for (let i = len - 1; i >= 0; --i) {
-          if (nodes[i].className.indexOf(this._labelClass) > -1) {
-            nodes[i].parentNode.removeChild(nodes[i]);
+        if (this.getPanes().overlayLayer) {
+          let nodes = this.getPanes().overlayLayer.children;
+          let len = nodes.length;
+          for (let i = len - 1; i >= 0; --i) {
+            if (nodes[i].className.indexOf(this._labelClass) > -1) {
+              nodes[i].parentNode.removeChild(nodes[i]);
+            }
           }
         }
       }
@@ -493,42 +529,19 @@
               }
             }
             if (code1 !== null) {
-              div.innerHTML = '<span class="code1" style="font-size: ' + Math.floor(w / code1.length) + 'px">' + code1 + '</span><br/>';
+              div.innerHTML = '<span class="' + this._code1Class +  ' ' + this.mapTypeId +
+              '" style="font-size: ' + Math.round(w / code1.length) + 'px">' + 
+              code1 + '</span>';
             }
-            div.innerHTML += '<span class="code2" style="font-size: ' + Math.floor(w / code2.length / 1.2) + 'px">' + code2 + '</span>';
+            div.innerHTML += '<span class="' + this._code2Class + ' ' + this.mapTypeId +
+            '" style="font-size: ' + Math.round(w / code2.length / 1.2) + 'px">' + 
+            code2 + '</span>';
             this.getPanes().overlayLayer.appendChild(div);
           }
         }
       }
       _drawGrid(sw, ne, latGridSize, lonGridSize, sub) {
-        const MapTypeMapper = {terrain: 'satellite', satellite: 'satellite', roadmap: 'roadmap', hybrid: 'roadmap'};
-        const StrokeParams = {
-          'satellite': {
-            'major': {
-              color: '#f93',
-              opacity: .9,
-              weight: 1
-            },
-            'minor': {
-              color: '#f93',
-              opacity: .5,
-              weight: .5
-            }
-          },
-          'roadmap': {
-            'major': {
-              color: '#44d',
-              opacity: .35,
-              weight: 1
-            },
-            'minor': {
-              color: '#44d',
-              opacity: .2,
-              weight: .5
-            }
-          }
-        };
-        let stroke = StrokeParams[MapTypeMapper[this.getMap().getMapTypeId()]][sub ? 'minor' : 'major'];
+        let stroke = this.strokeParams[sub ? 'minor' : 'major'];
         let polyLineOpts = {
           clickable: false,
           strokeColor: stroke.color,
@@ -568,18 +581,18 @@
           goDraw.apply(this);
         }
         function goDraw() {
+          let map = this.getMap();
           let ne = bounds.getNorthEast();
           let sw = bounds.getSouthWest();
           let zoom = this.getMap().getZoom();
-          let zoomFactor = Math.pow(2, map.getZoom());
           let subGrid = false;
           for (let resIdx = 0; resIdx < OLC.RESOLUTION.length; ++resIdx) {
             let latGridSize = OLC.RESOLUTION[resIdx];
             let lonGridSize = OLC.RESOLUTION[resIdx];
             let diametralEdge = new google.maps.LatLng(map.getCenter().lat() + latGridSize, map.getCenter().lng() + lonGridSize);
-            let swPx = map.getProjection().fromLatLngToPoint(map.getCenter()).x;
-            let nePx = map.getProjection().fromLatLngToPoint(diametralEdge).x;
-            let dist = zoomFactor * Math.abs(swPx - nePx);
+            let left = this.getProjection().fromLatLngToDivPixel(map.getCenter()).x;
+            let right = this.getProjection().fromLatLngToDivPixel(diametralEdge).x;
+            let dist = right - left;
             if (dist > GRID_WIDTH_THRESHOLD_PX && dist < window.innerWidth) {
               this._drawGrid(sw, ne, latGridSize, lonGridSize, subGrid);
               if (subGrid) {
@@ -683,9 +696,9 @@
     ];
     if (gridCheckbox.checked) {
       parms.push('g');
-    }
-    if (gridCheckbox.checked && labelsCheckbox.checked) {
-      parms.push('l');
+      if (labelsCheckbox.checked) {
+        parms.push('l');
+      }
     }
     window.location.hash = parms.join(';');
   };
@@ -733,6 +746,7 @@
   };
 
   let plusCodeChanged = () => {
+    console.log('plusCodeChanged()');
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
     if (validationResult.length === 0) {
@@ -772,7 +786,6 @@
           callback.call();
         }, TIMEOUT_MS);
       }
-      return false;
     };
     let cancelTap = e => {
       if (pressTimer !== null) {
@@ -782,7 +795,7 @@
       element.classList.remove('longpress');
     };
     element.addEventListener('mousedown', startTap);
-    element.addEventListener('touchstart', startTap);
+    element.addEventListener('touchstart', startTap, {passive: true});
     element.addEventListener('mouseout', cancelTap);
     element.addEventListener('mouseup', cancelTap);
     element.addEventListener('touchend', cancelTap);
@@ -868,8 +881,10 @@
     precCheckbox = document.getElementById('extra-precision');
     precCheckbox.addEventListener('click', extraPrecChanged, true);
     gridCheckbox = document.getElementById('show-grid');
+    gridCheckbox.checked = localStorage.getItem('grid');
     gridCheckbox.addEventListener('change', toggleGrid, true);
     labelsCheckbox = document.getElementById('show-labels');
+    labelsCheckbox.checked = localStorage.getItem('labels');
     labelsCheckbox.addEventListener('change', toggleLabels, true);
     window.addEventListener('hashchange', hashChanged, true);
     window.addEventListener('keydown', onKeyDown, true);

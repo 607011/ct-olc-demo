@@ -205,16 +205,22 @@
     }
   }
   .olc-label {
-    text-align: center;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    text-align: center;
   }
-  .olc-label .code1 {
+  .olc-label .code1.roadmap {
     color: rgba(68, 122, 221, 0.5);
   }
-  .olc-label .code2 {
+  .olc-label .code2.roadmap{
     color: rgba(68, 122, 221, 0.6);
+  }
+  .olc-label .code1.satellite {
+    color: rgba(231, 231, 68, 0.5);
+  }
+  .olc-label .code2.satellite {
+    color: rgba(231, 231, 68, 0.6);
   }
   </style>
 </head>
@@ -224,11 +230,11 @@
     <div class="rows">
       <div class="columns">
         <div>Breitengrad</div>
-        <div><input type="number" id="lat" min="-90" max="90" step="0.00001" /></div>
+        <div><input type="number" id="lat" min="-90" max="90" step="0.00126" /></div>
       </div>
       <div class="columns">
         <div>Längengrad</div>
-        <div><input type="number" id="lon" min="-180" max="180" step="0.00001" /></div>
+        <div><input type="number" id="lon" min="-180" max="180" step="0.000126" /></div>
       </div>
       <div class="columns">
         <div>Open Location Code</div>
@@ -256,15 +262,15 @@
     </div>
     <div id="map"></div>
     <footer>
-      v<span id="version"></span>
-      &#x25cf;
-      <a href="https://en.wikipedia.org/wiki/Open_Location_Code" target="_blank">Open Location Code</a>
-      &#x25cf;
-      <a href="https://plus.codes/" target="_blank">Plus Codes</a>
-      &#x25cf;
-      <a href="https://github.com/google/open-location-code/blob/master/docs/olc_definition.adoc" target="_blank">OLC-Definition</a>
-      &ndash;
       Copyright &copy; 2018 <a href="mailto:ola@ct.de">Oliver Lau</a>, <a href="http://www.heise.de/" target="_blank">Heise Medien GmbH&nbsp;&amp;&nbsp;Co.&nbsp;KG</a>
+      &#x220e;
+      v<span id="version"></span>
+      &#x2197;
+      <a href="https://en.wikipedia.org/wiki/Open_Location_Code" target="_blank">Open Location Code</a>
+      &#x2197;
+      <a href="https://plus.codes/" target="_blank">Plus Codes</a>
+      &#x2197;
+      <a href="https://github.com/google/open-location-code/blob/master/docs/olc_definition.adoc" target="_blank">OLC-Definition</a>
     </footer>
   </div>
   <textarea id="clipboard-cache" class="hidden"></textarea>
