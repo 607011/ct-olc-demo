@@ -1,6 +1,8 @@
 (function(window) {
   'use strict';
   const VERSION = '1.0.2';
+  //const EARTH_RADIUS_WGS84 = 6371000.8;
+  //const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS_WGS84;
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
@@ -750,7 +752,6 @@
   };
 
   let plusCodeChanged = () => {
-    console.log('plusCodeChanged()');
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
     if (validationResult.length === 0) {
