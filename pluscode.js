@@ -695,12 +695,13 @@
   };
 
   let updatePrecision = () => {
-    let deg = 1/8000;
+    let deg = OLC.GRID_SIZE_DEG;
     let code = plusCodeInput.value.replace(OLC.SEPARATOR, '');
     if (code.length === OLC.SEPARATOR_POSITION) {
       let padIdx = code.indexOf(OLC.PADDING_CHARACTER);
-      console.log(code, padIdx);
-      deg = (padIdx < 0) ? OLC.GRID_SIZE_DEG : OLC.RESOLUTION[padIdx/2-1]
+      if (padIdx > 0) {
+        deg = OLC.RESOLUTION[padIdx / 2 - 1];
+      }
     }
     else if (code.length === OLC.LENGTH_EXTRA) {
       deg = OLC.GRID_COL_SIZE;
