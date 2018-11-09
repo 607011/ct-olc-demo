@@ -694,6 +694,23 @@
     };
   };
 
+  let updatePrecision = () => {
+    let deg = 1/8000;
+    let code = plusCodeInput.value.replace(OLC.SEPARATOR, '');
+    if (code.length === OLC.SEPARATOR_POSITION) {
+      let padIdx = code.indexOf(OLC.PADDING_CHARACTER);
+      console.log(code, padIdx);
+      deg = (padIdx < 0) ? OLC.GRID_SIZE_DEG : OLC.RESOLUTION[padIdx/2-1]
+    }
+    else if (code.length === OLC.LENGTH_EXTRA) {
+      deg = OLC.GRID_COL_SIZE;
+    }
+    let x = deg / 360 * EARTH_CIRCUMFERENCE;
+      precisionDiv.innerHTML = (x > 1000)
+      ? (x / 1000).toFixed(0) + ' km'
+      : x.toFixed(1) + ' m';
+  };
+
   let updateState = () => {
     localStorage.setItem('pluscode', plusCodeInput.value);
     localStorage.setItem('zoom', map.getZoom());
@@ -701,6 +718,7 @@
     localStorage.setItem('labels', labelsCheckbox.checked);
     localStorage.setItem('mapTypeId', map.getMapTypeId());
     updateHash();
+    updatePrecision();
   };
 
   let updateHash = () => {
@@ -757,14 +775,6 @@
     updateState();
   };
 
-  let getPrecision = (deg) => {
-    let x = EARTH_CIRCUMFERENCE / 360 * deg;
-    if (x > 1000) {
-      return (x / 1000).toFixed(0) + ' km';
-    }
-    return x.toFixed(1) + ' m';
-  };
-
   let plusCodeChanged = () => {
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
@@ -773,22 +783,11 @@
       enableExtraPrecision(code.length-1 === OLC.LENGTH_EXTRA);
       convert2coord();
       hideBubble();
-      let deg = 1/8000;
-      code = code.replace(OLC.SEPARATOR, '');
-      console.log(code.length);
-      if (code.length === OLC.SEPARATOR_POSITION) {
-        let padIdx = code.indexOf(OLC.PADDING_CHARACTER);
-        console.log(code, padIdx);
-        deg = (padIdx < 0) ? OLC.GRID_SIZE_DEG : OLC.RESOLUTION[padIdx/2-1]
-      }
-      else if (code.length === OLC.LENGTH_EXTRA) {
-        deg = OLC.GRID_COL_SIZE;
-      }
-      precisionDiv.innerText = getPrecision(deg);
+      updatePrecision();
     }
     else {
       showBubble(plusCodeInput, validationResult, 3000);
-      precisionDiv.innerText = '?';
+      precisionDiv.innerHTML = 'n.&thinsp;v.';
     }
     plusCodeInput.setCustomValidity(validationResult);
   };
