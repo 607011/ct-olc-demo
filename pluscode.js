@@ -1,6 +1,6 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.0.1';
+  const VERSION = '1.0.2';
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
@@ -22,7 +22,7 @@
   let lastOLCLon;
   let uiInitialized = false;
 
-  
+
   let OLC = (function() {
     const ALPHABET = '23456789CFGHJMPQRVWX'.split('');
     const CODE_LENGTH_NORMAL = 10;
@@ -37,7 +37,7 @@
     const SEPARATOR = '+';
     const SEPARATOR_POSITION = 8;
     const PADDING_CHARACTER = '0';
-  
+
     return {
       RESOLUTION: RESOLUTION,
       LENGTH_NORMAL: CODE_LENGTH_NORMAL,
@@ -104,16 +104,16 @@
         let lon = parseFloat(lon_);
         if (isNaN(lat) || isNaN(lon))
           return 'latitude or longitude is not a valid number';
-  
+
         codeLength = Math.min(CODE_LENGTH_EXTRA, Math.max(codeLength, 2));
-  
+
         /* Clip the latitude to the range -90 to 90 */
         lat = Math.min(90, Math.max(-90, lat));
-  
+
         /* Normalize longitude to the range -180 to 180 */
         while (lon < -180) lon += 360;
         while (lon >= 180) lon -= 360;
-        
+
         /* If the latitude is 90, compute the height of the area based
         /* on the requested code length and subtract the height from
         /* the latitude. (This ensures the area represented does not
@@ -123,12 +123,12 @@
           ? Math.pow(DIVISOR, Math.floor(2 - codeLength / 2))
           : Math.pow(DIVISOR, -3) / Math.pow(GRID_ROWS, codeLength - CODE_LENGTH_NORMAL);
         }
-  
+
         /* Add 90 to the latitude and 180 to the longitude to move
         /* them into the positive range */
         lat += 90;
         lon += 180;
-  
+
         /* Encode up to five latitude and five longitude characters
         /* (10 in total) by converting each value into base 20
         /* (starting with a positional value of 20) and using the Open
@@ -259,10 +259,12 @@
                   ? address.administrative_area_level_4
                   : 'unbekannt'))))
         );
-        document.getElementById('OLC').value = plusCodeInput.value.substring(4) + ' ' + locality + ', ' + address.country;
+        olcInput.value = plusCodeInput.value.substring(4) + ' ' + locality + ', ' + address.country;
+        olcInput.classList.remove('error');
       }
       else {
-        document.getElementById('OLC').value = 'Geocoding fehlgeschlagen: ' + status;
+        olcInput.value = 'Geocoding fehlgeschlagen: ' + status;
+        olcInput.classList.add('error');
       }
     });
     return {
@@ -323,7 +325,7 @@
     cache.select();
     document.execCommand('copy');
   };
-  
+
   let initMap = () => {
     map = new google.maps.Map(document.getElementById('map'), {
       center: {
@@ -439,35 +441,32 @@
         }
       }
       get mapTypeId() {
-        return {terrain: 'roadmap', satellite: 'satellite', roadmap: 'roadmap', hybrid: 'satellite'}[this.getMap().getMapTypeId()];
+        switch (this.getMap().getMapTypeId()) {
+          case google.maps.MapTypeId.TERRAIN:
+            // fall-through
+          case google.maps.MapTypeId.ROADMAP:
+            return google.maps.MapTypeId.ROADMAP;
+          case google.maps.MapTypeId.HYBRID:
+            // fall-through
+          case google.maps.MapTypeId.SATELLITE:
+            return google.maps.MapTypeId.SATELLITE;
+          default:
+            throw 'Illegal map type ID: "' + this.getMap().getMapTypeId();
+        }
       }
       get strokeParams() {
-        return {
-          'satellite': {
-            'major': {
-              color: '#f93',
-              opacity: .9,
-              weight: 1
-            },
-            'minor': {
-              color: '#f93',
-              opacity: .5,
-              weight: .5
-            }
-          },
-          'roadmap': {
-            'major': {
-              color: '#44d',
-              opacity: .35,
-              weight: 1
-            },
-            'minor': {
-              color: '#44d',
-              opacity: .2,
-              weight: .5
-            }
-          }
-        }[this.mapTypeId];
+        switch (this.mapTypeId) {
+          case google.maps.MapTypeId.SATELLITE:
+            return {
+              major: {color: '#f93', opacity: .9, weight: 1},
+              minor: {color: '#f93', opacity: .5, weight: .5}
+            };
+          case google.maps.MapTypeId.ROADMAP:
+            return {
+              major: {color: '#44d', opacity: .35, weight: 1},
+              minor: {color: '#44d', opacity: .20, weight: .5}
+            };
+        }
       }
       _clear() {
         this._clearLabels();
@@ -492,19 +491,10 @@
         let dLon = sw.lng() % lonGridSize;
         for (let lat = sw.lat() - dLat - latGridSize; lat < ne.lat(); lat += latGridSize) {
           for (let lon = sw.lng() - dLon - lonGridSize; lon < ne.lng(); lon += lonGridSize) {
-            let lo = this._llToPixels(lat, lon);
-            let hi = this._llToPixels(lat + latGridSize, lon + lonGridSize);
+            let lo = this._llToPixels(new google.maps.LatLng({lat: lat, lng: lon}));
+            let hi = this._llToPixels(new google.maps.LatLng({lat: lat + latGridSize, lng: lon + lonGridSize}));
             let h = Math.abs(hi.y - lo.y);
             let w = Math.abs(hi.x - lo.x);
-            let left = lo.x;
-            let top = lo.y - h;
-            let div = document.createElement('div');
-            div.className = this._labelClass;
-            div.style.position = 'absolute';
-            div.style.left = left + 'px';
-            div.style.top = top + 'px';
-            div.style.width = w + 'px';
-            div.style.height = h + 'px';
             let code = OLC.encode(lat + latGridSize/2, lon + lonGridSize/2);
             let code1 = null;
             let code2 = null;
@@ -528,15 +518,32 @@
                 break;
               }
             }
+            let div = document.createElement('div');
+            let html = '';
             if (code1 !== null) {
-              div.innerHTML = '<span class="' + this._code1Class +  ' ' + this.mapTypeId +
-              '" style="font-size: ' + Math.round(w / code1.length) + 'px">' + 
-              code1 + '</span>';
+              let fontSize = Math.round(w / code1.length);
+              if (fontSize > 6){
+                html = '<span class="' + this._code1Class +  ' ' + this.mapTypeId +
+                '" style="font-size: ' + fontSize + 'px">' +
+                code1 + '</span>';
+              }
             }
-            div.innerHTML += '<span class="' + this._code2Class + ' ' + this.mapTypeId +
-            '" style="font-size: ' + Math.round(w / code2.length / 1.2) + 'px">' + 
-            code2 + '</span>';
-            this.getPanes().overlayLayer.appendChild(div);
+            let fontSize = Math.round(w / code2.length / 1.2);
+            if (fontSize > 6) {
+              html += '<span class="' + this._code2Class + ' ' + this.mapTypeId +
+              '" style="font-size: ' +  + 'px">' +
+              code2 + '</span>';
+            }
+            if (html !== '') {
+              div.innerHTML = html;
+              div.className = this._labelClass;
+              div.style.position = 'absolute';
+              div.style.left = lo.x + 'px';
+              div.style.top = (lo.y - h) + 'px';
+              div.style.width = w + 'px';
+              div.style.height = h + 'px';
+              this.getPanes().overlayLayer.appendChild(div);
+            }
           }
         }
       }
@@ -590,8 +597,8 @@
             let latGridSize = OLC.RESOLUTION[resIdx];
             let lonGridSize = OLC.RESOLUTION[resIdx];
             let diametralEdge = new google.maps.LatLng(map.getCenter().lat() + latGridSize, map.getCenter().lng() + lonGridSize);
-            let left = this.getProjection().fromLatLngToDivPixel(map.getCenter()).x;
-            let right = this.getProjection().fromLatLngToDivPixel(diametralEdge).x;
+            let left = this._llToPixels(map.getCenter()).x;
+            let right = this._llToPixels(diametralEdge).x;
             let dist = right - left;
             if (dist > GRID_WIDTH_THRESHOLD_PX && dist < window.innerWidth) {
               this._drawGrid(sw, ne, latGridSize, lonGridSize, subGrid);
@@ -611,8 +618,8 @@
           }
         }
       }
-      _llToPixels(lat, lon) {
-        return this.getProjection().fromLatLngToDivPixel(new google.maps.LatLng({lat: lat, lng: lon}));
+      _llToPixels(coord) {
+        return this.getProjection().fromLatLngToDivPixel(coord);
       }
     }
 
@@ -645,7 +652,7 @@
 
   let parseHash = () => {
     let hash = window.location.hash.substr(1);
-    let code, zoom, grid = false, labels = false, mapTypeId='hybrid';
+    let code, zoom, grid = false, labels = false, mapTypeId=google.maps.MapTypeId.ROADMAP;
     hash.split(';').forEach(v => {
       if (OLC.isValid(v.toUpperCase())) {
         code = v;
@@ -661,10 +668,10 @@
       }
       let zm = v.match(/^(\d+)z$/i);
       if (zm !== null && zm.length > 1) {
-        zoom = Number.parseInt(zm[1]);
+        zoom = parseInt(zm[1]);
         return;
       }
-      let tm = v.match(/^(roadmap|terrain|hybrid|satellite)$/i);
+      let tm = v.match(new RegExp('^(' + [google.maps.MapTypeId.SATELLITE, google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.TERRAIN, google.maps.MapTypeId.HYBRID].join('|') + ')$', 'i'));
       if (tm !== null && tm.length > 1) {
         mapTypeId = tm[1];
         return;
@@ -686,7 +693,7 @@
     localStorage.setItem('labels', labelsCheckbox.checked);
     localStorage.setItem('mapTypeId', map.getMapTypeId());
     updateHash();
-  }
+  };
 
   let updateHash = () => {
     let parms = [
@@ -732,17 +739,14 @@
       gridOverlay.hide();
       labelsCheckbox.disabled = true;
     }
-    return false;
   };
 
   let toggleGrid = () => {
     updateState();
-    return false;
   };
 
   let toggleLabels = () => {
     updateState();
-    return false;
   };
 
   let plusCodeChanged = () => {
