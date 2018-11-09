@@ -1,8 +1,8 @@
 (function(window) {
   'use strict';
   const VERSION = '1.0.2';
-  //const EARTH_RADIUS_WGS84 = 6371000.8;
-  //const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS_WGS84;
+  const EARTH_RADIUS_WGS84 = 6371000.8;
+  const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS_WGS84;
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
@@ -11,6 +11,7 @@
   let plusCodeInput = null;
   let olcInput = null;
   let precCheckbox = null;
+  let precisionDiv = null;
   let lastPrecCheckboxState = false;
   let gridCheckbox = null;
   let labelsCheckbox = null;
@@ -46,6 +47,11 @@
       LENGTH_EXTRA: CODE_LENGTH_EXTRA,
       GRID_COLS: GRID_COLS,
       GRID_ROWS: GRID_ROWS,
+      GRID_SIZE_DEG: GRID_SIZE_DEG,
+      GRID_COL_SIZE: GRID_COL_SIZE,
+      SEPARATOR_POSITION: SEPARATOR_POSITION,
+      SEPARATOR: SEPARATOR,
+      PADDING_CHARACTER: PADDING_CHARACTER,
       offset: extraPrecisionEnabled => {
         let offset = {
           lat: GRID_SIZE_DEG / 2,
@@ -751,6 +757,14 @@
     updateState();
   };
 
+  let getPrecision = (deg) => {
+    let x = EARTH_CIRCUMFERENCE / 360 * deg;
+    if (x > 1000) {
+      return (x / 1000).toFixed(0) + ' km';
+    }
+    return x.toFixed(1) + ' m';
+  };
+
   let plusCodeChanged = () => {
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
@@ -759,9 +773,22 @@
       enableExtraPrecision(code.length-1 === OLC.LENGTH_EXTRA);
       convert2coord();
       hideBubble();
+      let deg = 1/8000;
+      code = code.replace(OLC.SEPARATOR, '');
+      console.log(code.length);
+      if (code.length === OLC.SEPARATOR_POSITION) {
+        let padIdx = code.indexOf(OLC.PADDING_CHARACTER);
+        console.log(code, padIdx);
+        deg = (padIdx < 0) ? OLC.GRID_SIZE_DEG : OLC.RESOLUTION[padIdx/2-1]
+      }
+      else if (code.length === OLC.LENGTH_EXTRA) {
+        deg = OLC.GRID_COL_SIZE;
+      }
+      precisionDiv.innerText = getPrecision(deg);
     }
     else {
       showBubble(plusCodeInput, validationResult, 3000);
+      precisionDiv.innerText = '?';
     }
     plusCodeInput.setCustomValidity(validationResult);
   };
@@ -866,6 +893,7 @@
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
+    precisionDiv = document.getElementById('precision');
     let lat = localStorage.getItem('lat');
     latInput = document.getElementById('lat');
     latInput.value = lat ? lat : DEFAULT_LAT;
