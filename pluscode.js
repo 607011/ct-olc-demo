@@ -1,6 +1,6 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.0.2';
+  const VERSION = '1.1.0';
   const EARTH_RADIUS_WGS84 = 6371000.8;
   const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS_WGS84;
   const DEFAULT_LAT = 52.3858125;
@@ -388,6 +388,24 @@
       }
     });
 
+    let targetDiv = document.createElement('div');
+    targetDiv.innerHTML =
+    `<div id="centerControl" style="margin: 11px;">
+      <div id="target" style="text-align: center; width: 35px; height: 35px; background-color: white; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2)" class="clickable" title="Auf Markierung zentrieren">
+        <svg width="34" height="34">
+          <circle cx="17" cy="17" r="12" stroke="#222" stroke-width="1.5" fill="white" />
+          <circle cx="17" cy="17" r="9" stroke="#222" stroke-width="1.5" fill="none" />
+          <circle cx="17" cy="17" r="6" stroke="#222" stroke-width="1.5" fill="none" />
+          <circle cx="17" cy="17" r="3" stroke="none" fill="#222" />
+        </svg>
+      </div>
+    </div>`;
+    targetDiv.index = 1;
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(targetDiv);
+    targetDiv.addEventListener('click', function() {
+      map.panTo(marker.getPosition());
+    });
+
     class GridOverlay extends google.maps.OverlayView {
       constructor(map) {
         super();
@@ -399,6 +417,7 @@
         this._labelClass = 'olc-label';
         this._code1Class = 'code1';
         this._code2Class = 'code2';
+        this._code3Class = 'code3';
         this._displayLabels = false;
       }
       onAdd() {
@@ -497,52 +516,65 @@
       _drawLabels(sw, ne, latGridSize, lonGridSize) {
         let dLat = (sw.lat() % latGridSize) + (latGridSize === 20 ? 10 : 0);
         let dLon = sw.lng() % lonGridSize;
-        for (let lat = sw.lat() - dLat - latGridSize; lat < ne.lat(); lat += latGridSize) {
-          for (let lon = sw.lng() - dLon - lonGridSize; lon < ne.lng(); lon += lonGridSize) {
+        for (let lat = sw.lat() - dLat; lat < ne.lat(); lat += latGridSize) {
+          for (let lon = sw.lng() - dLon; lon < ne.lng(); lon += lonGridSize) {
             let lo = this._llToPixels(new google.maps.LatLng({lat: lat, lng: lon}));
             let hi = this._llToPixels(new google.maps.LatLng({lat: lat + latGridSize, lng: lon + lonGridSize}));
             let h = Math.abs(hi.y - lo.y);
             let w = Math.abs(hi.x - lo.x);
             let code = OLC.encode(lat + latGridSize/2, lon + lonGridSize/2);
-            let code1 = null;
-            let code2 = null;
+            let code1, code2, code3;
             switch (latGridSize) {
-              case 20: {
-                code2 = code.substr(0, 2);
+              case OLC.RESOLUTION[0]: {
+                code1 = code.substr(0, 2);
                 break;
               }
-              case 1: {
-                code2 = code.substr(0, 4);
+              case OLC.RESOLUTION[1]: {
+                code1 = code.substr(0, 4);
                 break;
               }
-              case 1/20: {
+              case OLC.RESOLUTION[2]: {
+                code1 = code.substr(0, 4);
                 code2 = code.substr(4, 2);
-                code1 = code.substr(0, 4);
                 break;
               }
-              default: {
-                code2 = code.substr(4, 4);
+              case OLC.RESOLUTION[3]: {
                 code1 = code.substr(0, 4);
+                code2 = code.substr(4, 4);
+                break;
+              }
+              case OLC.RESOLUTION[4]: {
+                code1 = code.substr(0, 4);
+                code2 = code.substr(4, 4);
+                code3 = code.substr(9, 2);
                 break;
               }
             }
-            let div = document.createElement('div');
             let html = '';
-            if (code1 !== null) {
-              let fontSize = Math.round(w / code1.length);
-              if (fontSize > 6){
+            if (code1) {
+              let fontSize = Math.floor(w / code1.length / 1.2);
+              if (fontSize > 6) {
                 html = '<span class="' + this._code1Class +  ' ' + this.mapTypeId +
                 '" style="font-size: ' + fontSize + 'px">' +
                 code1 + '</span>';
               }
             }
-            let fontSize = Math.round(w / code2.length / 1.2);
-            if (fontSize > 6) {
-              html += '<span class="' + this._code2Class + ' ' + this.mapTypeId +
-              '" style="font-size: ' +  + 'px">' +
-              code2 + '</span>';
+            if (code2) {
+              let fontSize = Math.floor(w / code2.length / 1.6);
+              if (fontSize > 6) {
+                html += '<span class="' + this._code2Class + ' ' + this.mapTypeId + '" ' +
+                'style="font-size: ' + fontSize + 'px">' + code2 + '</span>';
+              }
+            }
+            if (code3) {
+              let fontSize = Math.floor(w / code3.length / 3.2);
+              if (fontSize > 6) {
+                html += '<span class="' + this._code3Class + ' ' + this.mapTypeId + '" ' +
+                'style="font-size: ' + fontSize + 'px">' + code3 + '</span>';
+              }
             }
             if (html !== '') {
+              let div = document.createElement('div');
               div.innerHTML = html;
               div.className = this._labelClass;
               div.style.position = 'absolute';
@@ -829,6 +861,7 @@
     element.addEventListener('mousedown', startTap);
     element.addEventListener('touchstart', startTap, {passive: true});
     element.addEventListener('mouseout', cancelTap);
+    element.addEventListener('mousemove', cancelTap);
     element.addEventListener('mouseup', cancelTap);
     element.addEventListener('touchend', cancelTap);
     element.addEventListener('touchleave', cancelTap);
@@ -922,9 +955,6 @@
     window.addEventListener('hashchange', hashChanged, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
-    document.getElementById('target').addEventListener('click', () => {
-      map.panTo(marker.getPosition());
-    });
     convert2plus();
     document.getElementById('version').innerText = VERSION;
     hashChanged();
