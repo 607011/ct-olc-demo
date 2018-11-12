@@ -32,9 +32,9 @@
     const CODE_LENGTH_EXTRA = 11;
     const DIVISOR = 20;
     const RESOLUTION = [20, 1, 1/20, 1/400, 1/8000];
+    const GRID_SIZE_DEG = RESOLUTION[4];
     const GRID_COLS = 4;
     const GRID_ROWS = 5;
-    const GRID_SIZE_DEG = RESOLUTION[RESOLUTION.length-1];
     const GRID_ROW_SIZE = GRID_SIZE_DEG / GRID_ROWS;
     const GRID_COL_SIZE = GRID_SIZE_DEG / GRID_COLS;
     const SEPARATOR = '+';
