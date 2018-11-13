@@ -1,23 +1,23 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.1.0';
-  const EARTH_RADIUS_WGS84 = 6371000.8;
-  const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS_WGS84;
+  const VERSION = '1.2.0';
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
+  const TRUE = '1';
+  const FALSE = '0';
   let latInput = null;
   let lonInput = null;
   let plusCodeInput = null;
   let olcInput = null;
-  let precCheckbox = null;
-  let precisionDiv = null;
-  let lastPrecCheckboxState = false;
-  let gridCheckbox = null;
-  let labelsCheckbox = null;
+  let gridControl = null;
+  let labelsControl = null;
+  let extraPrecisionEnabled = false;
   let map = null;
   let marker = null;
   let area = null;
+  let showBubbleTimer = null;
+  let activeBubble = null;
   let gridOverlay = null;
   let mouseLatLng = null;
   let geocoder = null;
@@ -27,7 +27,8 @@
 
 
   let OLC = (function() {
-    const ALPHABET = '23456789CFGHJMPQRVWX'.split('');
+    const OLC_DIGITS = '23456789CFGHJMPQRVWX';
+    const ALPHABET = OLC_DIGITS.split('');
     const CODE_LENGTH_NORMAL = 10;
     const CODE_LENGTH_EXTRA = 11;
     const DIVISOR = 20;
@@ -64,36 +65,35 @@
         return offset;
       },
       validate: code => {
+        const PadRegex = new RegExp('(' + PADDING_CHARACTER + '+)', 'g');
         if (!code || typeof code !== 'string') {
           return 'Invalid type';
         }
-        if (code.indexOf(SEPARATOR) === -1) {
+        let sepIdx = code.indexOf(SEPARATOR);
+        if (sepIdx === -1) {
           return 'Separator missing';
         }
-        if (code.indexOf(SEPARATOR) !== code.lastIndexOf(SEPARATOR)) {
+        if (sepIdx !== code.lastIndexOf(SEPARATOR)) {
           return 'More than one separator';
         }
-        if (code.length === 1) {
+        if (code.length - sepIdx - 1 === 1) {
           return 'Invalid length';
         }
-        if (code.indexOf(SEPARATOR) > SEPARATOR_POSITION || code.indexOf(SEPARATOR) % 2 == 1) {
+        if (sepIdx > SEPARATOR_POSITION || sepIdx % 2 === 1) {
           return 'Separator on wrong position';
         }
         let padPos = code.indexOf(PADDING_CHARACTER);
         if (padPos > -1) {
-          if (padPos === 0) {
+          if (padPos < 3) {
             return 'Invalid padding';
           }
-          var padMatch = code.match(new RegExp('(' + PADDING_CHARACTER + '+)', 'g'));
+          var padMatch = code.match(PadRegex);
           if (padMatch.length > 1 || padMatch[0].length % 2 === 1 || padMatch[0].length > SEPARATOR_POSITION - 2) {
             return 'Invalid padding';
           }
           if (code.charAt(code.length - 1) !== SEPARATOR) {
             return 'No symbols allowed after separator if padding is present';
           }
-        }
-        if (code.length - code.indexOf(SEPARATOR) - 1 === 1) {
-          return 'Invalid length';
         }
         code = code.replace(new RegExp('\\' + SEPARATOR + '+'), '').replace(new RegExp(PADDING_CHARACTER + '+'), '');
         for (let i = 0, len = code.length; i < len; ++i) {
@@ -200,18 +200,8 @@
     };
   })();
 
-  let enableExtraPrecision = (enabled = true) => {
-    precCheckbox.checked = enabled;
-  }
-
-  let extraPrecisionEnabled = () => {
-    return precCheckbox.checked && !precCheckbox.disabled;
-  };
-
   let convert2plus = () => {
-    let codeLength = extraPrecisionEnabled()
-    ? OLC.LENGTH_EXTRA
-    : OLC.LENGTH_NORMAL;
+    let codeLength = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
     plusCodeInput.value = OLC.encode(latInput.value, lonInput.value, codeLength);
     updateState();
   };
@@ -296,9 +286,7 @@
   };
 
   let drawOLCArea = (lat_, lon_) => {
-    let precision = extraPrecisionEnabled()
-    ? OLC.LENGTH_EXTRA
-    : OLC.LENGTH_NORMAL;
+    let precision = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
     let pluscode = OLC.encode(lat_, lon_, precision);
     let {lat, lon} = OLC.decode(pluscode);
     if (lat === lastOLCLat && lon === lastOLCLon) {
@@ -309,7 +297,7 @@
     if (area !== null) {
       area.setMap(null);
     }
-    let offset = OLC.offset(extraPrecisionEnabled());
+    let offset = OLC.offset(extraPrecisionEnabled);
     area = new google.maps.Rectangle({
       clickable: false,
       strokeColor: '#ee1111',
@@ -332,6 +320,32 @@
     cache.value = value;
     cache.select();
     document.execCommand('copy');
+  };
+
+  let makeControl = (contents, callback, opts = {}) => {
+    let div = document.createElement('div');
+    Object.keys(opts).forEach(key => {
+      div.dataset[key] = opts[key];
+    });
+    div.innerHTML = contents;
+    div.index = 1;
+    div.className = 'map-control clickable';
+    if (opts.title) {
+      div.title = opts.title;
+    }
+    div.addEventListener('click', () => {
+      if (div.dataset.hasOwnProperty('enabled')) {
+        div.dataset.enabled = div.dataset.enabled === TRUE ? FALSE : TRUE;
+        if (div.dataset.enabled === TRUE) {
+          div.classList.add('enabled');
+        }
+        else {
+          div.classList.remove('enabled');
+        }
+      }
+      callback.call();
+    });
+    return div;
   };
 
   let initMap = () => {
@@ -360,17 +374,6 @@
     map.addListener('maptypeid_changed', e => {
       updateState();
     });
-    map.addListener('zoom_changed', () => {
-      if (map.getZoom() < 20) {
-        precCheckbox.disabled = true;
-        precCheckbox.parentNode.classList.add('disabled');
-      }
-      else {
-        precCheckbox.disabled = false;
-        precCheckbox.parentNode.classList.remove('disabled');
-      }
-      updateState();
-    });
     map.addListener('click', e => {
       latInput.value = e.latLng.lat();
       lonInput.value = e.latLng.lng();
@@ -388,23 +391,33 @@
       }
     });
 
-    let targetDiv = document.createElement('div');
-    targetDiv.innerHTML =
-    `<div id="centerControl" style="margin: 11px;">
-      <div id="target" style="text-align: center; width: 35px; height: 35px; background-color: white; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.2)" class="clickable" title="Auf Markierung zentrieren">
-        <svg width="34" height="34">
-          <circle cx="17" cy="17" r="12" stroke="#222" stroke-width="1.5" fill="white" />
-          <circle cx="17" cy="17" r="9" stroke="#222" stroke-width="1.5" fill="none" />
-          <circle cx="17" cy="17" r="6" stroke="#222" stroke-width="1.5" fill="none" />
-          <circle cx="17" cy="17" r="3" stroke="none" fill="#222" />
-        </svg>
-      </div>
-    </div>`;
-    targetDiv.index = 1;
-    map.controls[google.maps.ControlPosition.TOP_LEFT].push(targetDiv);
-    targetDiv.addEventListener('click', function() {
-      map.panTo(marker.getPosition());
+    let additionalControls = document.createElement('div');
+    additionalControls.style.marginTop = '11px';
+    additionalControls.style.border = '2px solid #fff';
+    additionalControls.style.boxShadow = 'rgba(0, 0, 0, 0.3) 0px 1px 4px -1px';
+    additionalControls.style.height = '35px';
+    additionalControls.style.backgroundColor = 'white';
+    let centerControl = makeControl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#target" x="0" y="0"/></svg>`,
+      () => map.panTo(marker.getPosition()),
+      {
+        title: 'Auf Markierung zentrieren'
+      });
+    additionalControls.appendChild(centerControl);
+
+    gridControl = makeControl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#grid" x="0" y="0"/></svg>`,
+      toggleGrid, 
+      {
+        title: 'Gitter ein-/ausschalten',
+        enabled: FALSE
+      })
+    additionalControls.appendChild(gridControl);
+
+    labelsControl = makeControl(``, () => {
+      console.log('click on labelsControl');
     });
+    additionalControls.appendChild(labelsControl);
+
+    map.controls[google.maps.ControlPosition.TOP_LEFT].push(additionalControls);
 
     class GridOverlay extends google.maps.OverlayView {
       constructor(map) {
@@ -503,7 +516,7 @@
         this._lonGridLines = [];
       }
       _clearLabels() {
-        if (this.getPanes().overlayLayer) {
+        if (this.getPanes() && this.getPanes().overlayLayer) {
           let nodes = this.getPanes().overlayLayer.children;
           let len = nodes.length;
           for (let i = len - 1; i >= 0; --i) {
@@ -675,15 +688,14 @@
 
   let onKeyDown = e => {
     if (e.shiftKey) {
-      lastPrecCheckboxState = precCheckbox.checked;
-      precCheckbox.checked = true;
+      extraPrecisionEnabled = true;
       redrawOLCArea();
     }
   };
 
   let onKeyUp = e => {
     if (e.keyCode === 16) {
-      precCheckbox.checked = lastPrecCheckboxState;
+      extraPrecisionEnabled = false;
       if (mouseLatLng !== null) {
         redrawOLCArea();
       }
@@ -692,18 +704,18 @@
 
   let parseHash = () => {
     let hash = window.location.hash.substr(1);
-    let code, zoom, grid = false, labels = false, mapTypeId=google.maps.MapTypeId.ROADMAP;
+    let code, zoom, grid = FALSE, labels = FALSE, mapTypeId=google.maps.MapTypeId.ROADMAP;
     hash.split(';').forEach(v => {
       if (OLC.isValid(v.toUpperCase())) {
         code = v;
         return;
       }
       if (v === 'g') {
-        grid = true;
+        grid = TRUE;
         return;
       }
       if (v === 'l') {
-        labels = true;
+        labels = TRUE;
         return;
       }
       let zm = v.match(/^(\d+)z$/i);
@@ -726,32 +738,15 @@
     };
   };
 
-  let updatePrecision = () => {
-    let deg = OLC.GRID_SIZE_DEG;
-    let code = plusCodeInput.value.replace(OLC.SEPARATOR, '');
-    if (code.length === OLC.SEPARATOR_POSITION) {
-      let padIdx = code.indexOf(OLC.PADDING_CHARACTER);
-      if (padIdx > 0) {
-        deg = OLC.RESOLUTION[padIdx / 2 - 1];
-      }
-    }
-    else if (code.length === OLC.LENGTH_EXTRA) {
-      deg = OLC.GRID_COL_SIZE;
-    }
-    let x = deg / 360 * EARTH_CIRCUMFERENCE;
-      precisionDiv.innerHTML = (x > 1000)
-      ? (x / 1000).toFixed(0) + ' km'
-      : x.toFixed(1) + ' m';
-  };
-
   let updateState = () => {
     localStorage.setItem('pluscode', plusCodeInput.value);
     localStorage.setItem('zoom', map.getZoom());
-    localStorage.setItem('grid', gridCheckbox.checked);
-    localStorage.setItem('labels', labelsCheckbox.checked);
     localStorage.setItem('mapTypeId', map.getMapTypeId());
+    if (gridControl && labelsControl) {
+      localStorage.setItem('grid', gridControl.dataset.enabled);
+      localStorage.setItem('labels', labelsControl.dataset.enabled);  
+    }
     updateHash();
-    updatePrecision();
   };
 
   let updateHash = () => {
@@ -760,9 +755,9 @@
       map.getZoom() + 'z',
       map.getMapTypeId(),
     ];
-    if (gridCheckbox.checked) {
+    if (gridControl && gridControl.dataset.enabled === TRUE) {
       parms.push('g');
-      if (labelsCheckbox.checked) {
+      if (labelsControl && labelsControl.dataset.enabled === TRUE) {
         parms.push('l');
       }
     }
@@ -785,18 +780,20 @@
     if (mapTypeId !== map.getMapTypeId()) {
       map.setMapTypeId(mapTypeId);
     }
-    gridCheckbox.checked = grid;
-    labelsCheckbox.disabled = !grid;
-    if (grid) {
-      labelsCheckbox.checked = labels;
-      gridOverlay.enableLabels(labels);
-      if (!labels) {
-        gridOverlay.show();
+    if (gridControl !== null) {
+      gridControl.dataset.enabled = grid;
+      labelsControl.dataset.enabled = grid;
+      if (grid === TRUE) {
+        labelsControl.dataset.enabled = labels;
+        gridOverlay.enableLabels(labels);
+        if (labels === FALSE) {
+          gridOverlay.show();
+        }
       }
-    }
-    else {
-      gridOverlay.hide();
-      labelsCheckbox.disabled = true;
+      else {
+        gridOverlay.hide();
+        labelsControl.dataset.enabled = TRUE;
+      }
     }
   };
 
@@ -816,11 +813,9 @@
       enableExtraPrecision(code.length-1 === OLC.LENGTH_EXTRA);
       convert2coord();
       hideBubble();
-      updatePrecision();
     }
     else {
       showBubble(plusCodeInput, validationResult, 3000);
-      precisionDiv.innerHTML = 'n.&thinsp;v.';
     }
     plusCodeInput.setCustomValidity(validationResult);
   };
@@ -867,9 +862,6 @@
     element.addEventListener('touchleave', cancelTap);
     element.addEventListener('touchcancel', cancelTap);
   };
-
-  let showBubbleTimer = null;
-  let activeBubble = null;
 
   let showBubble = (where, msg, timeout_ms = 2000) => {
     hideBubble();
@@ -926,7 +918,6 @@
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
-    precisionDiv = document.getElementById('precision');
     let lat = localStorage.getItem('lat');
     latInput = document.getElementById('lat');
     latInput.value = lat ? lat : DEFAULT_LAT;
@@ -944,14 +935,6 @@
     olcInput = document.getElementById('OLC');
     enableMessageBubble(olcInput);
     enableLongPress(olcInput, copyOLC2ToClipboard);
-    precCheckbox = document.getElementById('extra-precision');
-    precCheckbox.addEventListener('click', extraPrecChanged, true);
-    gridCheckbox = document.getElementById('show-grid');
-    gridCheckbox.checked = localStorage.getItem('grid');
-    gridCheckbox.addEventListener('change', toggleGrid, true);
-    labelsCheckbox = document.getElementById('show-labels');
-    labelsCheckbox.checked = localStorage.getItem('labels');
-    labelsCheckbox.addEventListener('change', toggleLabels, true);
     window.addEventListener('hashchange', hashChanged, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
