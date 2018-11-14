@@ -437,8 +437,7 @@
         super();
         this.setMap(map);
         this._listeners = [];
-        this._latGridLines = [];
-        this._lonGridLines = [];
+        this._gridLines = [];
         this._divs = [];
         this._labelClass = 'olc-label';
         this._code1Class = 'code1';
@@ -449,7 +448,7 @@
       onAdd() {
         let self = this;
         function redraw() {
-          let doDraw = self._latGridLines.length > 0 && self._lonGridLines.length > 0;
+          let doDraw = self._gridLines.length > 0;
           self._clear();
           if (doDraw) {
             self._draw();
@@ -523,10 +522,8 @@
       }
       _clear() {
         this._clearLabels();
-        this._latGridLines.forEach(v => v.setMap(null));
-        this._lonGridLines.forEach(v => v.setMap(null));
-        this._latGridLines = [];
-        this._lonGridLines = [];
+        this._gridLines.forEach(v => v.setMap(null));
+        this._gridLines = [];
       }
       _clearLabels() {
         if (this.getPanes() && this.getPanes().overlayLayer) {
@@ -629,7 +626,7 @@
             { lat: ne.lat(), lng: lon },
           ];
           let line = new google.maps.Polyline(polyLineOpts);
-          this._lonGridLines.push(line);
+          this._gridLines.push(line);
         }
         let dLat = (sw.lat() % latGridSize) + (latGridSize === 20 ? 10 : 0);
         for (let lat = sw.lat() - dLat; lat < ne.lat(); lat += latGridSize) {
@@ -638,7 +635,7 @@
             { lat: lat, lng: ne.lng() },
           ];
           let line = new google.maps.Polyline(polyLineOpts);
-          this._latGridLines.push(line);
+          this._gridLines.push(line);
         }
       }
       _draw() {
