@@ -207,7 +207,6 @@
   let convert2plus = () => {
     let codeLength = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
     plusCodeInput.value = OLC.encode(latInput.value, lonInput.value, codeLength);
-    updateState();
   };
 
   let geocodeOLC = () => {
@@ -394,6 +393,7 @@
       lonInput.value = e.latLng.lng();
       convert2plus();
       convert2coord();
+      updateState();
     });
     map.addListener('mousemove', e => {
       mouseLatLng = e.latLng;
@@ -789,6 +789,7 @@
   };
 
   let hashChanged = () => {
+    console.log('hashChanged()');
     let {code, zoom, grid, labels, mapTypeId} = parseHash();
     if (code && zoom) {
       if (OLC.isValid(code)) {
@@ -845,7 +846,7 @@
     let validationResult = OLC.validate(code);
     if (validationResult.length === 0) {
       plusCodeInput.value = code;
-      updateMap();
+      updateState();
       hideBubble();
     }
     else {
@@ -859,6 +860,7 @@
     localStorage.setItem('lon', lonInput.value);
     convert2plus();
     plusCodeChanged();
+    updateState();
   };
 
   let enableLongPress = (element, callback) => {
