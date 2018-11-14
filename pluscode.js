@@ -261,7 +261,7 @@
           olcInput.value = 'Geocoding fehlgeschlagen: ' + status;
           olcInput.classList.add('error');
         }
-      });  
+      });
     }
   };
 
@@ -335,7 +335,7 @@
     document.execCommand('copy');
   };
 
-  let makeControl = (params = {opts: {}}) => {
+  let makeControl = (params = {opts: {enabled: TRUE}}) => {
     let div = document.createElement('div');
     div.innerHTML = params.contents;
     div.className = 'map-control clickable';
@@ -343,7 +343,7 @@
     params.opts = params.opts || {};
     Object.keys(params.opts).forEach(key => {
       div.dataset[key] = params.opts[key];
-    });  
+    });
     if (params.title) {
       div.title = params.title;
     }
@@ -420,20 +420,13 @@
     gridControl = makeControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#grid" x="0" y="0"/></svg>',
         title: 'Gitter ein-/ausschalten',
-        callback: toggleGrid,
-        opts: {
-          enabled: TRUE,
-        }
+        callback: toggleGrid
       });
     additionalControls.appendChild(gridControl);
 
     labelsControl = makeControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#labels" x="0" y="0"/></svg>',
         title: 'Beschriftung ein-/ausschalten',
-        opts: {
-          disabled: FALSE,
-          enabled: FALSE  
-        },
         callback: toggleLabels
       });
     additionalControls.appendChild(labelsControl);
@@ -763,9 +756,18 @@
     localStorage.setItem('mapTypeId', map.getMapTypeId());
     if (gridControl && labelsControl) {
       localStorage.setItem('grid', gridControl.dataset.enabled);
-      localStorage.setItem('labels', labelsControl.dataset.enabled);  
+      localStorage.setItem('labels', labelsControl.dataset.enabled);
     }
     updateHash();
+  };
+
+  let updateLabelsControl = () => {
+    if (gridControl.dataset.enabled === FALSE) {
+      labelsControl.classList.add('disabled');
+    }
+    else {
+      labelsControl.classList.remove('disabled');
+    }
   };
 
   let updateHash = () => {
@@ -785,44 +787,38 @@
 
   let hashChanged = () => {
     let {code, zoom, grid, labels, mapTypeId} = parseHash();
-    if (code === undefined || zoom === undefined)
-      return;
-    if (OLC.isValid(code)) {
-      plusCodeInput.value = code;
-      let {lat, lon} = convert2coord();
-      placeMarker(lat, lon);
-      drawOLCArea(lat, lon);
-    }
-    if (zoom !== map.getZoom()) {
-      map.setZoom(zoom);
-    }
-    if (mapTypeId !== map.getMapTypeId()) {
-      map.setMapTypeId(mapTypeId);
-    }
-    if (gridControl !== null) {
-      gridControl.dataset.enabled = grid;
-      labelsControl.dataset.enabled = grid;
-      if (grid === TRUE) {
-        labelsControl.dataset.enabled = labels;
-        gridOverlay.enableLabels(labels);
-        if (labels === FALSE) {
-          gridOverlay.show();
-        }
+    if (code && zoom) {
+      if (OLC.isValid(code)) {
+        plusCodeInput.value = code;
+        let {lat, lon} = convert2coord();
+        placeMarker(lat, lon);
+        drawOLCArea(lat, lon);
       }
-      else {
-        gridOverlay.hide();
-        labelsControl.dataset.enabled = TRUE;
+      if (zoom !== map.getZoom()) {
+        map.setZoom(zoom);
+      }
+      if (mapTypeId !== map.getMapTypeId()) {
+        map.setMapTypeId(mapTypeId);
+      }
+      if (gridControl) {
+        gridControl.dataset.enabled = grid;
+        updateLabelsControl();
+        if (grid === TRUE) {
+          labelsControl.dataset.enabled = labels;
+          gridOverlay.enableLabels(labels === TRUE);
+          if (labels === FALSE) {
+            gridOverlay.show();
+          }
+        }
+        else {
+          gridOverlay.hide();
+        }
       }
     }
   };
 
   let toggleGrid = () => {
-    if (gridControl.dataset.enabled === FALSE) {
-      labelsControl.classList.add('disabled');
-    }
-    else {
-      labelsControl.classList.remove('disabled');
-    }
+    updateLabelsControl();
     updateState();
   };
 

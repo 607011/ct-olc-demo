@@ -51,10 +51,6 @@
     color: red;
     font-weight: bold;
   }
-  .disabled {
-    color: gray;
-    cursor: auto;
-  }
   .icon {
     width: 1.4em;
     height: 1.4em;
@@ -241,8 +237,8 @@
     stroke-width: 1.5px;
     fill: none;
   }
-  .map-control.clickable.disabled svg circle, line, rect, path {
-    stroke: #ccc;
+  .map-control.disabled {
+    display: none;
   }
   </style>
 </head>
@@ -281,13 +277,13 @@
   </div>
   <textarea id="clipboard-cache" class="hidden"></textarea>
   <svg xmlns="http://www.w3.org/2000/svg">
-    <symbol id="target" width="35" height="35" viewBox="0 0 35 35">
+    <symbol id="target" viewBox="0 0 35 35">
       <circle cx="17" cy="17" r="12"/>
       <circle cx="17" cy="17" r="9"/>
       <circle cx="17" cy="17" r="6"/>
       <circle cx="17" cy="17" r="3"/>
     </symbol>
-    <symbol id="grid" width="35" height="35" viewBox="0 0 35 35">
+    <symbol id="grid" viewBox="0 0 35 35">
       <line x1="7" y1="7" x2="28" y2="7"/>
       <line x1="7" y1="14" x2="28" y2="14"/>
       <line x1="7" y1="21" x2="28" y2="21"/>
@@ -297,7 +293,7 @@
       <line x1="21" y1="7" x2="21" y2="28"/>
       <line x1="28" y1="7" x2="28" y2="28"/>
     </symbol>
-    <symbol id="labels" width="35" height="35" viewBox="0 0 35 35">
+    <symbol id="labels" viewBox="0 0 35 35">
         <rect x="7" y="7" width="21" height="21"/>
         <line x1="17.5" y1="12" x2="17.5" y2="23"/>
         <line x1="12" y1="17.5" x2="23" y2="17.5"/>
