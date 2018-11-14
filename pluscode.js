@@ -1,6 +1,6 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.2.0';
+  const VERSION = '1.2.1';
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
@@ -303,30 +303,29 @@
     let precision = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
     let pluscode = OLC.encode(lat_, lon_, precision);
     let {lat, lon} = OLC.decode(pluscode);
-    if (lat === lastOLCLat && lon === lastOLCLon) {
-      return;
-    }
-    lastOLCLat = lat;
-    lastOLCLon = lon;
-    if (area !== null) {
-      area.setMap(null);
-    }
-    let offset = OLC.offset(extraPrecisionEnabled);
-    area = new google.maps.Rectangle({
-      clickable: false,
-      strokeColor: '#ee1111',
-      strokeOpacity: 0.8,
-      strokeWeight: 2,
-      fillColor: '#ee1111',
-      fillOpacity: 0.3,
-      map: map,
-      bounds: {
-        north: lat - offset.lat,
-        south: lat + offset.lat,
-        east: lon + offset.lon,
-        west: lon - offset.lon
+    if (lat !== lastOLCLat || lon !== lastOLCLon) {
+      lastOLCLat = lat;
+      lastOLCLon = lon;
+      if (area !== null) {
+        area.setMap(null);
       }
-    });
+      let offset = OLC.offset(extraPrecisionEnabled);
+      area = new google.maps.Rectangle({
+        clickable: false,
+        strokeColor: '#e11',
+        strokeOpacity: .8,
+        strokeWeight: 2,
+        fillColor: '#e11',
+        fillOpacity: .3,
+        map: map,
+        bounds: {
+          north: lat - offset.lat,
+          south: lat + offset.lat,
+          east: lon + offset.lon,
+          west: lon - offset.lon
+        }
+      });
+    }
   };
 
   let copyToClipboard = (value) => {
