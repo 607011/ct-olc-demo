@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="de-DE">
 <head>
   <meta charset="UTF-8">
   <title>OLC-Konvertierung</title>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDPfq0C6Ndy9uNyrNg7aPdDgexnubQjtS8&language=de"></script>
-  <script type="text/javascript" src="pluscode.js"></script>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDPfq0C6Ndy9uNyrNg7aPdDgexnubQjtS8&language=de"></script>
+  <script async defer src="pluscode.js"></script>
   <link rel="icon" type="image/svg+xml" href="ico/favicon.svg" sizes="any">
   <link rel="apple-touch-icon" sizes="57x57" href="ico/apple-icon-57x57.png">
   <link rel="apple-touch-icon" sizes="60x60" href="ico/apple-icon-60x60.png">
@@ -24,6 +24,7 @@
   <meta name="msapplication-TileImage" content="ico/ms-icon-144x144.png">
   <meta name="theme-color" content="#ffffff">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Breiten- und Längengrad in Open Location Codes umwandeln und umgekehrt. Koordinaten lassen sich auf einer Google-Maps-Karte anklicken.">
   <meta name="copyright" content="Heise Medien GmbH & Co. KG - Redaktion c't">
   <meta name="author" content="Oliver Lau">
   <meta name="reply-to" content="ola@ct.de">
@@ -259,7 +260,7 @@
         <div><input type="text" id="pluscode" minlength="2" maxlength="12" size="16"/><span class="validity"></span></div>
       </div>
       <div class="columns">
-        <div><input type="text" id="OLC" size="32" placeholder="Open Location Code" readonly/><input type="checkbox" id="geocoding" title="Geocoding ein-/ausschalten"/></div>
+        <div><input type="text" id="OLC" size="32" placeholder="&ldquo;gekürzter&rdquo; Open Location Code" readonly/><input type="checkbox" id="geocoding" title="Geocoding ein-/ausschalten"/></div>
       </div>
     </div>
     <div id="map"></div>

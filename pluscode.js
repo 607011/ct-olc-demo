@@ -267,25 +267,23 @@
 
   let convert2coord = () => {
     let coord = OLC.decode(plusCodeInput.value);
-    if (coord === null)
-      return;
-    let {lat, lon} = coord;
-    latInput.value = parseFloat(lat.toFixed(12));
-    lonInput.value = parseFloat(lon.toFixed(12));
-    localStorage.setItem('lat', latInput.value);
-    localStorage.setItem('lon', lonInput.value);
-    placeMarker(lat, lon);
-    drawOLCArea(lat, lon);
-    currentLat = lat;
-    currentLon = lon;
-    geocodeOLC();
-    return {
-      lat: lat,
-      lon: lon
+    if (coord !== null) {
+      let {lat, lon} = coord;
+      latInput.value = parseFloat(lat.toFixed(12));
+      lonInput.value = parseFloat(lon.toFixed(12));
+      localStorage.setItem('lat', latInput.value);
+      localStorage.setItem('lon', lonInput.value);
+      currentLat = lat;
+      currentLon = lon;
+      return {
+        lat: lat,
+        lon: lon
+      }
     }
   };
 
   let placeMarker = (lat, lon) => {
+    console.log('placeMarker()');
     let latLng = new google.maps.LatLng(lat, lon);
     if (marker !== null) {
       marker.setMap(null);
@@ -371,6 +369,7 @@
         lng: DEFAULT_LON
       },
       zoom: DEFAULT_ZOOM,
+      gestureHandling: 'greedy',
       options: {
         streetViewControl: false,
         fullscreenControl: false,
@@ -767,6 +766,7 @@
   };
 
   let updateHash = () => {
+    console.log(parseHash());
     let parms = [
       plusCodeInput.value,
       map.getZoom() + 'z',
@@ -781,14 +781,19 @@
     window.location.hash = parms.join(';');
   };
 
+  let updateMap = () => {
+    let {lat, lon} = convert2coord();
+    placeMarker(lat, lon);
+    drawOLCArea(lat, lon);
+    geocodeOLC();
+  };
+
   let hashChanged = () => {
     let {code, zoom, grid, labels, mapTypeId} = parseHash();
     if (code && zoom) {
       if (OLC.isValid(code)) {
         plusCodeInput.value = code;
-        let {lat, lon} = convert2coord();
-        placeMarker(lat, lon);
-        drawOLCArea(lat, lon);
+        updateMap();
       }
       if (zoom !== map.getZoom()) {
         map.setZoom(zoom);
@@ -797,6 +802,7 @@
         map.setMapTypeId(mapTypeId);
       }
       if (gridControl) {
+        console.log(gridControl, labelsControl, code, zoom, grid, labels, mapTypeId);
         gridControl.dataset.enabled = grid;
         updateLabelsControl();
         if (grid === TRUE) {
@@ -834,11 +840,12 @@
   };
 
   let plusCodeChanged = () => {
+    console.log('plusCodeChanged()');
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
     if (validationResult.length === 0) {
       plusCodeInput.value = code;
-      convert2coord();
+      updateMap();
       hideBubble();
     }
     else {
@@ -939,6 +946,7 @@
   let geocodingEnabled = () => geocodingCheckbox.checked;
 
   let initUI = () => {
+    console.log(parseHash());
     clipboardCache = document.getElementById('clipboard-cache');
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
