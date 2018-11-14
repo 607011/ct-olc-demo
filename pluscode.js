@@ -1,6 +1,6 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
   const DEFAULT_LAT = 52.3858125;
   const DEFAULT_LON = 9.8096875;
   const DEFAULT_ZOOM = 18;
@@ -297,8 +297,8 @@
   };
 
   let drawOLCArea = (lat_, lon_) => {
-    let precision = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
-    let pluscode = OLC.encode(lat_, lon_, precision);
+    let codeLength = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
+    let pluscode = OLC.encode(lat_, lon_, codeLength);
     let {lat, lon} = OLC.decode(pluscode);
     if (lat !== lastOLCLat || lon !== lastOLCLon) {
       lastOLCLat = lat;
@@ -599,11 +599,9 @@
               let div = document.createElement('div');
               div.innerHTML = html;
               div.className = this._labelClass;
-              div.style.position = 'absolute';
-              div.style.left = lo.x + 'px';
-              div.style.top = (lo.y - h) + 'px';
-              div.style.width = w + 'px';
-              div.style.height = h + 'px';
+              div.setAttribute('style', 'position: absolute;' +
+                'left: ' + lo.x + 'px; top: ' + (lo.y - h) + 'px;' + 
+                'width: ' + w + 'px; height: ' + h + 'px;');
               this.getPanes().overlayLayer.appendChild(div);
             }
           }
@@ -640,6 +638,7 @@
       _draw() {
         const GRID_WIDTH_THRESHOLD_PX = 7;
         let bounds = this.getMap().getBounds();
+        let innerWidth = window.innerWidth; // to prevent layout thrashing
         let self = this;
         if (bounds === undefined) {
           setTimeout(function () {
@@ -662,7 +661,7 @@
             let left = this._llToPixels(map.getCenter()).x;
             let right = this._llToPixels(diametralEdge).x;
             let dist = right - left;
-            if (dist > GRID_WIDTH_THRESHOLD_PX && dist < window.innerWidth) {
+            if (dist > GRID_WIDTH_THRESHOLD_PX && dist < innerWidth) {
               this._drawGrid(sw, ne, latGridSize, lonGridSize, subGrid);
               if (subGrid) {
                 break;
