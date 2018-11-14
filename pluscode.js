@@ -6,6 +6,7 @@
   const DEFAULT_ZOOM = 18;
   const TRUE = '1';
   const FALSE = '0';
+  let clipboardCache = null;
   let latInput = null;
   let lonInput = null;
   let plusCodeInput = null;
@@ -21,8 +22,11 @@
   let gridOverlay = null;
   let mouseLatLng = null;
   let geocoder = null;
+  let geocodingCheckbox = null;
   let lastOLCLat;
   let lastOLCLon;
+  let currentLat;
+  let currentLon;
   let uiInitialized = false;
 
 
@@ -206,6 +210,61 @@
     updateState();
   };
 
+  let geocodeOLC = () => {
+    let lat = currentLat;
+    let lon = currentLon;
+    if (geocodingEnabled()) {
+      geocoder.geocode({
+        latLng: {lat: lat, lng: lon}
+      }, (results, status) => {
+        if (status === google.maps.GeocoderStatus.OK) {
+          const ComponentTypes = [
+            'administrative_area_level_1',
+            'administrative_area_level_2',
+            'administrative_area_level_3',
+            'administrative_area_level_4',
+            'sublocality_level_2',
+            'sublocality_level_1',
+            'postal_code',
+            'locality',
+            'country'];
+          let address = {};
+          results.forEach(r => {
+            if (r.address_components) {
+              r.address_components.forEach(component => {
+                if (component.types) {
+                  component.types.filter(t => ComponentTypes.indexOf(t) > -1).forEach(type => {
+                    if (!address.hasOwnProperty(type)) {
+                      address[type] = component.long_name;
+                    }
+                  });
+                }
+              });
+            }
+          });
+          let locality = (address.locality
+            ? address.locality
+            : (address.administrative_area_level_1
+              ? address.administrative_area_level_1
+              : (address.administrative_area_level_2
+                ? address.administrative_area_level_2
+                : (address.administrative_area_level_3
+                  ? address.administrative_area_level_3
+                  : (address.administrative_area_level_4
+                    ? address.administrative_area_level_4
+                    : 'unbekannt'))))
+          );
+          olcInput.value = plusCodeInput.value.substring(4) + ' ' + locality + ', ' + address.country;
+          olcInput.classList.remove('error');
+        }
+        else {
+          olcInput.value = 'Geocoding fehlgeschlagen: ' + status;
+          olcInput.classList.add('error');
+        }
+      });
+    }
+  };
+
   let convert2coord = () => {
     let coord = OLC.decode(plusCodeInput.value);
     if (coord === null)
@@ -217,54 +276,9 @@
     localStorage.setItem('lon', lonInput.value);
     placeMarker(lat, lon);
     drawOLCArea(lat, lon);
-    geocoder.geocode({
-      latLng: {lat: lat, lng: lon}
-    }, (results, status) => {
-      if (status === google.maps.GeocoderStatus.OK) {
-        const ComponentTypes = [
-          'administrative_area_level_1',
-          'administrative_area_level_2',
-          'administrative_area_level_3',
-          'administrative_area_level_4',
-          'sublocality_level_2',
-          'sublocality_level_1',
-          'postal_code',
-          'locality',
-          'country'];
-        let address = {};
-        results.forEach(r => {
-          if (r.address_components) {
-            r.address_components.forEach(component => {
-              if (component.types) {
-                component.types.filter(t => ComponentTypes.indexOf(t) > -1).forEach(type => {
-                  if (!address.hasOwnProperty(type)) {
-                    address[type] = component.long_name;
-                  }
-                });
-              }
-            });
-          }
-        });
-        let locality = (address.locality
-          ? address.locality
-          : (address.administrative_area_level_1
-            ? address.administrative_area_level_1
-            : (address.administrative_area_level_2
-              ? address.administrative_area_level_2
-              : (address.administrative_area_level_3
-                ? address.administrative_area_level_3
-                : (address.administrative_area_level_4
-                  ? address.administrative_area_level_4
-                  : 'unbekannt'))))
-        );
-        olcInput.value = plusCodeInput.value.substring(4) + ' ' + locality + ', ' + address.country;
-        olcInput.classList.remove('error');
-      }
-      else {
-        olcInput.value = 'Geocoding fehlgeschlagen: ' + status;
-        olcInput.classList.add('error');
-      }
-    });
+    currentLat = lat;
+    currentLon = lon;
+    geocodeOLC();
     return {
       lat: lat,
       lon: lon
@@ -316,22 +330,25 @@
   };
 
   let copyToClipboard = (value) => {
-    let cache = document.getElementById('clipboard-cache');
-    cache.value = value;
-    cache.select();
+    clipboardCache.value = value;
+    clipboardCache.select();
     document.execCommand('copy');
   };
 
-  let makeControl = (contents, callback, opts = {}) => {
+  let makeControl = (params = {opts: {enabled: TRUE}}) => {
     let div = document.createElement('div');
-    Object.keys(opts).forEach(key => {
-      div.dataset[key] = opts[key];
-    });
-    div.innerHTML = contents;
-    div.index = 1;
+    div.innerHTML = params.contents;
     div.className = 'map-control clickable';
-    if (opts.title) {
-      div.title = opts.title;
+    div.index = 1;
+    params.opts = params.opts || {};
+    Object.keys(params.opts).forEach(key => {
+      div.dataset[key] = params.opts[key];
+    });
+    if (params.title) {
+      div.title = params.title;
+    }
+    if (params.opts.disabled === TRUE) {
+      div.classList.add('disabled');
     }
     div.addEventListener('click', () => {
       if (div.dataset.hasOwnProperty('enabled')) {
@@ -343,7 +360,7 @@
           div.classList.remove('enabled');
         }
       }
-      callback.call();
+      params.callback.call();
     });
     return div;
   };
@@ -392,29 +409,26 @@
     });
 
     let additionalControls = document.createElement('div');
-    additionalControls.style.marginTop = '11px';
-    additionalControls.style.border = '2px solid #fff';
-    additionalControls.style.boxShadow = 'rgba(0, 0, 0, 0.3) 0px 1px 4px -1px';
-    additionalControls.style.height = '35px';
-    additionalControls.style.backgroundColor = 'white';
-    let centerControl = makeControl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#target" x="0" y="0"/></svg>`,
-      () => map.panTo(marker.getPosition()),
-      {
-        title: 'Auf Markierung zentrieren'
+    additionalControls.setAttribute('style', 'margin-top: 11px; border: 2px solid #fff; box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px; height: 35px; background-color: #fff')
+    let centerControl = makeControl({
+        contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#target" x="0" y="0"/></svg>',
+        title: 'Auf Markierung zentrieren',
+        callback: () => map.panTo(marker.getPosition())
       });
     additionalControls.appendChild(centerControl);
 
-    gridControl = makeControl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#grid" x="0" y="0"/></svg>`,
-      toggleGrid, 
-      {
+    gridControl = makeControl({
+        contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#grid" x="0" y="0"/></svg>',
         title: 'Gitter ein-/ausschalten',
-        enabled: FALSE
-      })
+        callback: toggleGrid
+      });
     additionalControls.appendChild(gridControl);
 
-    labelsControl = makeControl(``, () => {
-      console.log('click on labelsControl');
-    });
+    labelsControl = makeControl({
+        contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#labels" x="0" y="0"/></svg>',
+        title: 'Beschriftung ein-/ausschalten',
+        callback: toggleLabels
+      });
     additionalControls.appendChild(labelsControl);
 
     map.controls[google.maps.ControlPosition.TOP_LEFT].push(additionalControls);
@@ -696,9 +710,7 @@
   let onKeyUp = e => {
     if (e.keyCode === 16) {
       extraPrecisionEnabled = false;
-      if (mouseLatLng !== null) {
-        redrawOLCArea();
-      }
+      redrawOLCArea();
     }
   };
 
@@ -744,9 +756,18 @@
     localStorage.setItem('mapTypeId', map.getMapTypeId());
     if (gridControl && labelsControl) {
       localStorage.setItem('grid', gridControl.dataset.enabled);
-      localStorage.setItem('labels', labelsControl.dataset.enabled);  
+      localStorage.setItem('labels', labelsControl.dataset.enabled);
     }
     updateHash();
+  };
+
+  let updateLabelsControl = () => {
+    if (gridControl.dataset.enabled === FALSE) {
+      labelsControl.classList.add('disabled');
+    }
+    else {
+      labelsControl.classList.remove('disabled');
+    }
   };
 
   let updateHash = () => {
@@ -764,40 +785,40 @@
     window.location.hash = parms.join(';');
   };
 
-  let hashChanged = e => {
+  let hashChanged = () => {
     let {code, zoom, grid, labels, mapTypeId} = parseHash();
-    if (code === undefined || zoom === undefined)
-      return;
-    if (OLC.isValid(code)) {
-      plusCodeInput.value = code;
-      let {lat, lon} = convert2coord();
-      placeMarker(lat, lon);
-      drawOLCArea(lat, lon);
-    }
-    if (zoom !== map.getZoom()) {
-      map.setZoom(zoom);
-    }
-    if (mapTypeId !== map.getMapTypeId()) {
-      map.setMapTypeId(mapTypeId);
-    }
-    if (gridControl !== null) {
-      gridControl.dataset.enabled = grid;
-      labelsControl.dataset.enabled = grid;
-      if (grid === TRUE) {
-        labelsControl.dataset.enabled = labels;
-        gridOverlay.enableLabels(labels);
-        if (labels === FALSE) {
-          gridOverlay.show();
-        }
+    if (code && zoom) {
+      if (OLC.isValid(code)) {
+        plusCodeInput.value = code;
+        let {lat, lon} = convert2coord();
+        placeMarker(lat, lon);
+        drawOLCArea(lat, lon);
       }
-      else {
-        gridOverlay.hide();
-        labelsControl.dataset.enabled = TRUE;
+      if (zoom !== map.getZoom()) {
+        map.setZoom(zoom);
+      }
+      if (mapTypeId !== map.getMapTypeId()) {
+        map.setMapTypeId(mapTypeId);
+      }
+      if (gridControl) {
+        gridControl.dataset.enabled = grid;
+        updateLabelsControl();
+        if (grid === TRUE) {
+          labelsControl.dataset.enabled = labels;
+          gridOverlay.enableLabels(labels === TRUE);
+          if (labels === FALSE) {
+            gridOverlay.show();
+          }
+        }
+        else {
+          gridOverlay.hide();
+        }
       }
     }
   };
 
   let toggleGrid = () => {
+    updateLabelsControl();
     updateState();
   };
 
@@ -805,12 +826,22 @@
     updateState();
   };
 
+  let toggleGeocoding = () => {
+    if (geocodingEnabled()) {
+      olcInput.disabled = false;
+      geocodeOLC();
+    }
+    else {
+      olcInput.value = '';
+      olcInput.disabled = true;
+    }
+  };
+
   let plusCodeChanged = () => {
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
     if (validationResult.length === 0) {
       plusCodeInput.value = code;
-      enableExtraPrecision(code.length-1 === OLC.LENGTH_EXTRA);
       convert2coord();
       hideBubble();
     }
@@ -825,11 +856,6 @@
     localStorage.setItem('lon', lonInput.value);
     convert2plus();
     plusCodeChanged();
-  };
-
-  let extraPrecChanged = () => {
-    convert2plus();
-    convert2coord();
   };
 
   let enableLongPress = (element, callback) => {
@@ -914,7 +940,10 @@
     showBubble(olcInput, 'Open Location Code in Zwischenablage kopiert.');
   };
 
+  let geocodingEnabled = () => geocodingCheckbox.checked;
+
   let initUI = () => {
+    clipboardCache = document.getElementById('clipboard-cache');
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
@@ -935,6 +964,9 @@
     olcInput = document.getElementById('OLC');
     enableMessageBubble(olcInput);
     enableLongPress(olcInput, copyOLC2ToClipboard);
+    geocodingCheckbox = document.getElementById('geocoding');
+    geocodingCheckbox.addEventListener('change', toggleGeocoding);
+    geocodingCheckbox.checked = true;
     window.addEventListener('hashchange', hashChanged, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
