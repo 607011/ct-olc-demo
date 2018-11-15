@@ -1,7 +1,7 @@
 (function(window) {
   'use strict';
   const VERSION = '1.2.3';
-  const DEFAULT_PLUSCODE = '9F4F9RP5+8V ';
+  const DEFAULT_PLUSCODE = '9F4F9RP5+8V';
   const DEFAULT_ZOOM = 18;
   const MAP_TYPES = ['roadmap', 'terrain', 'satellite', 'hybrid'];
   const DEFAULT_MAPTYPE_ID = 'roadmap';
@@ -267,8 +267,6 @@
     if (coord) {
       latInput.value = parseFloat(coord.lat.toFixed(12));
       lngInput.value = parseFloat(coord.lng.toFixed(12));
-      localStorage.setItem('lat', latInput.value);
-      localStorage.setItem('lng', lngInput.value);
       return coord;
     }
     return null;
@@ -853,8 +851,6 @@
   };
 
   let latLonChanged = () => {
-    localStorage.setItem('lat', latInput.value);
-    localStorage.setItem('lng', lngInput.value);
     convert2plus();
     plusCodeChanged();
     updateState();
@@ -955,12 +951,10 @@
     enableMessageBubble(plusCodeInput);
     let hashData = parseHash();
     let stored = {
-      pluscode: localStorage.getItem('pluscode'),
       zoom: localStorage.getItem('zoom'),
+      pluscode: localStorage.getItem('pluscode'),
       geocoding: localStorage.getItem('geocoding'),
-      mapTypeId: localStorage.getItem('mapTypeId'),
-      labels: localStorage.getItem('labels'),
-      grid: localStorage.getItem('grid')
+      mapTypeId: localStorage.getItem('mapTypeId')
     };
     let zoom = hashData.zoom
     ? hashData.zoom
@@ -972,11 +966,10 @@
     : (MAP_TYPES.includes(stored.mapTypeId)
       ? stored.mapTypeId
       : DEFAULT_MAPTYPE_ID);
-    let storedPluscode = localStorage.getItem('pluscode');
     let pluscode = hashData.code
     ? hashData.code
-    : (OLC.isValid(storedPluscode)
-      ? storedPluscode
+    : (OLC.isValid(stored.pluscode)
+      ? stored.pluscode
       : DEFAULT_PLUSCODE);
     plusCodeInput.value = pluscode;
     let center = OLC.decode(pluscode);
