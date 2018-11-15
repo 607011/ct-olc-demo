@@ -11,7 +11,7 @@
   let latInput = null;
   let lngInput = null;
   let plusCodeInput = null;
-  let olcInput = null;
+  let olcOutput = null;
   let gridControl = null;
   let labelsControl = null;
   let extraPrecisionEnabled = false;
@@ -99,7 +99,7 @@
             return 'No symbols allowed after separator if padding is present';
           }
         }
-        code = code.replace(new RegExp(`\\${SEPARATOR}+`), '').replace(new RegExp(`${PADDING_CHARACTER}+`), '');
+        code = code.replace(new RegExp(`\\${SEPARATOR}+`), '').replace(PadRegex, '');
         for (let i = 0, len = code.length; i < len; ++i) {
           let character = code.charAt(i).toUpperCase();
           if (character !== SEPARATOR && ALPHABET.indexOf(character) === -1) {
@@ -112,8 +112,8 @@
         return OLC.validate(code) === '';
       },
       encode: (coord, codeLength = CODE_LENGTH_NORMAL) => {
-        let lat = parseFloat(coord.lat);
-        let lng = parseFloat(coord.lng);
+        let lat = coord.lat;
+        let lng = coord.lng;
         if (isNaN(lat) || isNaN(lng))
           return 'latitude or longitude is not a valid number';
 
@@ -246,27 +246,27 @@
                     ? address.administrative_area_level_4
                     : 'unbekannt'))))
           );
-          olcInput.value = `${plusCodeInput.value.substring(4)} ${locality}, ${address.country}`;
-          olcInput.classList.remove('error');
+          olcOutput.value = `${plusCodeInput.value.substring(4)} ${locality}, ${address.country}`;
+          olcOutput.classList.remove('error');
         }
         else {
-          olcInput.value = `Geocoding fehlgeschlagen: ${status}`;
-          olcInput.classList.add('error');
+          olcOutput.value = `Geocoding fehlgeschlagen: ${status}`;
+          olcOutput.classList.add('error');
         }
       });
     }
   };
 
   let convert2plus = () => {
-    plusCodeInput.value = OLC.encode({lat: latInput.value, lng: lngInput.value},
+    plusCodeInput.value = OLC.encode({lat: +latInput.value, lng: +lngInput.value},
       extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL);
   };
 
   let convert2coord = () => {
     let coord = OLC.decode(plusCodeInput.value);
     if (coord) {
-      latInput.value = parseFloat(coord.lat.toFixed(12));
-      lngInput.value = parseFloat(coord.lng.toFixed(12));
+      latInput.value = +coord.lat.toFixed(12);
+      lngInput.value = +coord.lng.toFixed(12);
       return coord;
     }
     return null;
@@ -712,7 +712,7 @@
       }
       let zm = ZoomRegex.exec(v);
       if (zm !== null && zm.length > 1) {
-        let z = parseInt(zm[1]);
+        let z = Math.round(zm[1]);
         if (!isNaN(z)) {
           zoom = z;
         }
@@ -778,11 +778,14 @@
         map.setMapTypeId(mapTypeId);
       }
       if (geocoding === TRUE) {
-        olcInput.disabled = false;
+        olcOutput.disabled = false;
+        geocodingEnabled = true;
       }
       else {
-        olcInput.value = '';
-        olcInput.disabled = true;
+        olcOutput.value = '';
+        olcOutput.disabled = true;
+        geocodingEnabled = false;
+        geocodeOLC(marker.getPosition());
       }
       if (gridControl) {
         gridControl.dataset.enabled = grid;
@@ -928,13 +931,14 @@
   };
 
   let copyOLC2ToClipboard = () => {
-    copyToClipboard(olcInput.value);
-    showBubble(olcInput, 'Open Location Code in Zwischenablage kopiert.');
+    copyToClipboard(olcOutput.value);
+    showBubble(olcOutput, 'Open Location Code in Zwischenablage kopiert.');
   };
 
   let main = () => {
     Object.defineProperty(window, 'geocodingEnabled', {
-      get: () => geocodingCheckbox.checked
+      get: () => geocodingCheckbox.checked,
+      set: enabled => geocodingCheckbox.checked = enabled,
     });
     clipboardCache = document.getElementById('clipboard-cache');
     document.getElementById('version').innerText = VERSION;
@@ -952,8 +956,8 @@
     };
     let zoom = hashData.zoom
     ? hashData.zoom
-    : (!isNaN(parseFloat(stored.zoom))
-      ? parseFloat(stored.zoom)
+    : (!isNaN(+stored.zoom)
+      ? +stored.zoom
       : DEFAULT_ZOOM);
     let mapTypeId = hashData.mapTypeId
     ? hashData.mapTypeId
@@ -977,12 +981,12 @@
     lngInput.addEventListener('input', latLonChanged, true);
     enableLongPress(lngInput, () => { copyLatLonToClipboard(lngInput); });
     enableMessageBubble(lngInput);
-    olcInput = document.getElementById('olc');
-    enableLongPress(olcInput, copyOLC2ToClipboard);
-    enableMessageBubble(olcInput);
+    olcOutput = document.getElementById('olc');
+    enableLongPress(olcOutput, copyOLC2ToClipboard);
+    enableMessageBubble(olcOutput);
     geocodingCheckbox = document.getElementById('geocoding');
+    geocodingEnabled = hashData.geocoding === TRUE;
     geocodingCheckbox.addEventListener('change', toggleGeocoding);
-    geocodingCheckbox.checked = hashData.geocoding === TRUE;
     window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
