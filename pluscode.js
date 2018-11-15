@@ -53,6 +53,7 @@
       GRID_COLS: GRID_COLS,
       GRID_ROWS: GRID_ROWS,
       GRID_SIZE_DEG: GRID_SIZE_DEG,
+      GRID_ROW_SIZE: GRID_ROW_SIZE,
       GRID_COL_SIZE: GRID_COL_SIZE,
       SEPARATOR_POSITION: SEPARATOR_POSITION,
       SEPARATOR: SEPARATOR,
@@ -642,7 +643,6 @@
       _draw() {
         const GRID_WIDTH_THRESHOLD_PX = 7;
         let bounds = this.getMap().getBounds();
-        let innerWidth = window.innerWidth; // to prevent layout thrashing
         let self = this;
         if (bounds === undefined) {
           setTimeout(function () {
@@ -653,16 +653,18 @@
           goDraw.apply(this);
         }
         function goDraw() {
+          let innerWidth = window.innerWidth; // not in loop to prevent layout thrashing
           let map = this.getMap();
           let ne = bounds.getNorthEast();
           let sw = bounds.getSouthWest();
           let zoom = this.getMap().getZoom();
+          let center = map.getCenter();
           let subGrid = false;
           for (let resIdx = 0; resIdx < OLC.RESOLUTION.length; ++resIdx) {
             let latGridSize = OLC.RESOLUTION[resIdx];
-            let lonGridSize = OLC.RESOLUTION[resIdx];
+            let lonGridSize = latGridSize;
             let diametralEdge = new google.maps.LatLng(map.getCenter().lat() + latGridSize, map.getCenter().lng() + lonGridSize);
-            let left = this._llToPixels(map.getCenter()).x;
+            let left = this._llToPixels(center).x;
             let right = this._llToPixels(diametralEdge).x;
             let dist = right - left;
             if (dist > GRID_WIDTH_THRESHOLD_PX && dist < innerWidth) {
@@ -677,9 +679,7 @@
             }
           }
           if (this._codeLength === OLC.LENGTH_EXTRA || zoom > 19) {
-            let latGridSize = OLC.RESOLUTION[4] / OLC.GRID_ROWS;
-            let lonGridSize = OLC.RESOLUTION[4] / OLC.GRID_COLS;
-            this._drawGrid(sw, ne, latGridSize, lonGridSize, true);
+            this._drawGrid(sw, ne, OLC.GRID_ROW_SIZE, OLC.GRID_COL_SIZE, true);
           }
         }
       }
@@ -964,13 +964,13 @@
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
-    let lat = localStorage.getItem('lat');
+    let lat = parseFloat(localStorage.getItem('lat'));
     latInput = document.getElementById('lat');
-    latInput.value = lat ? lat : DEFAULT_LAT;
+    latInput.value = isNaN(lat) ? DEFAULT_LAT : lat;
     latInput.addEventListener('input', latLonChanged, true);
-    let lon = localStorage.getItem('lon');
+    let lon = parseFloat(localStorage.getItem('lon'));
     lonInput = document.getElementById('lon');
-    lonInput.value = lon ? lon : DEFAULT_LON;
+    lonInput.value = isNaN(lon) ? DEFAULT_LON : lon;
     lonInput.addEventListener('input', latLonChanged, true);
     enableLongPress(plusCodeInput, copyOLCToClipboard);
     enableLongPress(latInput, () => { copyLatLonToClipboard(latInput); });
