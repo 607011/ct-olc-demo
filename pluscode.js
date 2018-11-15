@@ -364,29 +364,6 @@
   };
 
   let initMap = () => {
-    map = new google.maps.Map(document.getElementById('map'), {
-      center: {
-        lat: DEFAULT_LAT,
-        lng: DEFAULT_LON
-      },
-      zoom: DEFAULT_ZOOM,
-      gestureHandling: 'greedy',
-      options: {
-        streetViewControl: false,
-        fullscreenControl: false,
-        styles: [
-          {
-            featureType: 'poi.business',
-            stylers: [{visibility: 'off'}]
-          },
-          {
-            featureType: 'transit',
-            elementType: 'labels.icon',
-            stylers: [{visibility: 'off'}]
-          }
-        ]
-      }
-    });
     map.addListener('maptypeid_changed', e => {
       updateState();
     });
@@ -400,12 +377,6 @@
     map.addListener('mousemove', e => {
       mouseLatLng = e.latLng;
       drawOLCArea(e.latLng.lat(), e.latLng.lng());
-    });
-    map.addListener('bounds_changed', () => {
-      if (!uiInitialized) {
-        initUI();
-        uiInitialized = true;
-      }
     });
     map.addListener('idle', () => {
       updateState();
@@ -647,7 +618,7 @@
         if (bounds === undefined) {
           setTimeout(function () {
             self._draw.apply(this);
-          }.bind(this), 500);
+          }.bind(this), 100);
         }
         else {
           goDraw.apply(this);
@@ -655,15 +626,15 @@
         function goDraw() {
           let innerWidth = window.innerWidth; // not in loop to prevent layout thrashing
           let map = this.getMap();
+          let center = map.getCenter();
+          let zoom = map.getZoom();
           let ne = bounds.getNorthEast();
           let sw = bounds.getSouthWest();
-          let zoom = this.getMap().getZoom();
-          let center = map.getCenter();
           let subGrid = false;
           for (let resIdx = 0; resIdx < OLC.RESOLUTION.length; ++resIdx) {
             let latGridSize = OLC.RESOLUTION[resIdx];
             let lonGridSize = latGridSize;
-            let diametralEdge = new google.maps.LatLng(map.getCenter().lat() + latGridSize, map.getCenter().lng() + lonGridSize);
+            let diametralEdge = new google.maps.LatLng(center.lat() + latGridSize, center.lng() + lonGridSize);
             let left = this._llToPixels(center).x;
             let right = this._llToPixels(diametralEdge).x;
             let dist = right - left;
@@ -959,18 +930,37 @@
 
   let geocodingEnabled = () => geocodingCheckbox.checked;
 
-  let initUI = () => {
+  let main = () => {
     clipboardCache = document.getElementById('clipboard-cache');
+    document.getElementById('version').innerText = VERSION;
+    let hashData = parseHash();
+    let lat = DEFAULT_LAT, lon = DEFAULT_LON, zoom = DEFAULT_ZOOM;
+    if (hashData.code) {
+      let coord = OLC.decode(hashData.code);
+      if (coord) {
+        lat = coord.lat;
+        lon = coord.lon;
+      }
+      else {
+        lat = parseFloat(localStorage.getItem('lat'));
+        lon = parseFloat(localStorage.getItem('lon'));
+        if (isNaN(lat) || isNaN(lon)) {
+          lat = DEFAULT_LAT;
+          lon = DEFAULT_LON;
+        }
+      }
+    }
+    if (hashData.zoom) {
+      zoom = hashData.zoom;
+    }
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
-    let lat = parseFloat(localStorage.getItem('lat'));
     latInput = document.getElementById('lat');
-    latInput.value = isNaN(lat) ? DEFAULT_LAT : lat;
+    latInput.value = lat;
     latInput.addEventListener('input', latLonChanged, true);
-    let lon = parseFloat(localStorage.getItem('lon'));
     lonInput = document.getElementById('lon');
-    lonInput.value = isNaN(lon) ? DEFAULT_LON : lon;
+    lonInput.value = lon;
     lonInput.addEventListener('input', latLonChanged, true);
     enableLongPress(plusCodeInput, copyOLCToClipboard);
     enableLongPress(latInput, () => { copyLatLonToClipboard(latInput); });
@@ -987,12 +977,35 @@
     window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
-    document.getElementById('version').innerText = VERSION;
-    evaluateHash();
-  };
-
-  let main = () => {
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: {
+        lat: lat,
+        lng: lon
+      },
+      zoom: zoom,
+      gestureHandling: 'greedy',
+      options: {
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: [
+          {
+            featureType: 'poi.business',
+            stylers: [{visibility: 'off'}]
+          },
+          {
+            featureType: 'transit',
+            elementType: 'labels.icon',
+            stylers: [{visibility: 'off'}]
+          }
+        ]
+      }
+    });
     initMap();
+    let boundsChangedHandler = map.addListener('bounds_changed', () => {
+      placeMarker(lat, lon);
+      drawOLCArea(lat, lon);
+      google.maps.event.removeListener(boundsChangedHandler);
+    });
   };
 
   window.addEventListener('load', main);
