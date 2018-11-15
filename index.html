@@ -31,12 +31,11 @@
   <meta name="keywords" content="Open Location Code, OLC, Plus-Code, Geocoding, Konverter">
   <style type="text/css">
   html, body {
-    font-family: Roboto, Helevetica, Arial, sans-serif;
+    font-family: Helvetica, Arial, sans-serif;
     font-size: 12pt;
     height: 100%;
     margin: 0;
     overflow: hidden;
-    -webkit-font-smoothing: antialiased;
   }
   #map {
     width: 100%;
@@ -88,20 +87,12 @@
   .small {
     font-size: smaller;
   }
-  button {
-    border: 1px solid #333;
-    font-size: 10pt;
-    background-color: #333;
-    color: #eee;
-    font-weight: bold;
-    padding: 1ex 1em;
-  }
   input[type=text], input[type=number] {
     border: 1px solid #222;
     font-family: Helvetica, Arial, sans-serif;
     font-size: 12pt;
     padding: 3pt;
-    min-width: 9em;
+    min-width: 8.5em;
   }
   input[type=text]:read-only {
     border: 1px dotted #444;
@@ -119,13 +110,12 @@
     color: green;
   }
   header {
-    padding: .5ex 4px;
+    padding: .5ex 4pt;
     font-size: 14.5pt;
     font-weight: bold;
     background-color: #222;
     color: #fff;
-    margin: 0;
-  }
+}
   footer {
     background-color: #222;
     color: #ddd;
@@ -187,13 +177,19 @@
     0% { background: inherit; }
     100% { background: rgb(174, 255, 97); }
   }
-  @media (max-height: 600px) {
+  @media (max-height: 800px) {
     header {
       padding: .3ex 3px;
       font-size: 12.5pt;
+      text-align: center;
     }
     footer {
       display: none;
+    }
+  }
+  @media (max-width: 800px) {
+    header {
+      text-align: center;
     }
   }
   .olc-label {
@@ -245,22 +241,22 @@
 </head>
 <body>
   <div class="main">
-    <header>Open-Location-Code-Konvertierung</header>
+    <header>Open-Location-Code-Konvertierer</header>
     <div class="rows">
       <div class="columns">
         <div>Breitengrad</div>
-        <div><input type="number" id="lat" min="-90" max="90" step="0.00126"/></div>
+        <div><input type="number" id="lat" min="-90" max="90" step="0.00126" size="13"/></div>
       </div>
       <div class="columns">
         <div>Längengrad</div>
-        <div><input type="number" id="lon" min="-180" max="180" step="0.000126"/></div>
+        <div><input type="number" id="lon" min="-180" max="180" step="0.000126" size="13"/></div>
       </div>
       <div class="columns">
         <div>Open Location Code</div>
         <div><input type="text" id="pluscode" minlength="2" maxlength="12" size="16"/><span class="validity"></span></div>
       </div>
       <div class="columns">
-        <div><input type="text" id="OLC" size="32" placeholder="&ldquo;gekürzter&rdquo; Open Location Code" readonly/><input type="checkbox" id="geocoding" title="Geocoding ein-/ausschalten"/></div>
+        <div style="white-space: pre"><input type="text" id="OLC" size="31" placeholder="&ldquo;gekürzter&rdquo; Open Location Code" readonly/><input type="checkbox" id="geocoding" title="Geocoding ein-/ausschalten"/></div>
       </div>
     </div>
     <div id="map"></div>
@@ -295,9 +291,9 @@
       <line x1="28" y1="7" x2="28" y2="28"/>
     </symbol>
     <symbol id="labels" viewBox="0 0 35 35">
-        <rect x="7" y="7" width="21" height="21"/>
-        <line x1="17.5" y1="12" x2="17.5" y2="23"/>
-        <line x1="12" y1="17.5" x2="23" y2="17.5"/>
+      <rect x="7" y="7" width="21" height="21"/>
+      <line x1="17.5" y1="12" x2="17.5" y2="23"/>
+      <line x1="12" y1="17.5" x2="23" y2="17.5"/>
     </symbol>
   </svg>
 </body>

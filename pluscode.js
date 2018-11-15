@@ -266,7 +266,7 @@
 
   let convert2coord = () => {
     let coord = OLC.decode(plusCodeInput.value);
-    if (coord !== null) {
+    if (coord) {
       let {lat, lon} = coord;
       latInput.value = parseFloat(lat.toFixed(12));
       lonInput.value = parseFloat(lon.toFixed(12));
@@ -279,12 +279,13 @@
         lon: lon
       }
     }
+    return null;
   };
 
   let placeMarker = (lat, lon) => {
-    console.log('placeMarker()');
+    // console.log('placeMarker()');
     let latLng = new google.maps.LatLng(lat, lon);
-    if (marker !== null) {
+    if (marker) {
       marker.setMap(null);
     }
     marker = new google.maps.Marker({
@@ -303,7 +304,7 @@
     if (lat !== lastOLCLat || lon !== lastOLCLon) {
       lastOLCLat = lat;
       lastOLCLon = lon;
-      if (area !== null) {
+      if (area) {
         area.setMap(null);
       }
       let offset = OLC.offset(extraPrecisionEnabled);
@@ -325,7 +326,7 @@
     }
   };
 
-  let copyToClipboard = (value) => {
+  let copyToClipboard = value => {
     clipboardCache.value = value;
     clipboardCache.select();
     document.execCommand('copy');
@@ -404,6 +405,9 @@
         initUI();
         uiInitialized = true;
       }
+    });
+    map.addListener('idle', () => {
+      updateState();
     });
 
     let additionalControls = document.createElement('div');
@@ -710,7 +714,7 @@
 
   let parseHash = () => {
     let hash = window.location.hash.substr(1);
-    let code, zoom, grid = FALSE, labels = FALSE, mapTypeId=google.maps.MapTypeId.ROADMAP;
+    let code, zoom, grid = FALSE, labels = FALSE, mapTypeId=google.maps.MapTypeId.ROADMAP, geocoding = FALSE;
     hash.split(';').forEach(v => {
       if (OLC.isValid(v.toUpperCase())) {
         code = v;
@@ -718,6 +722,10 @@
       }
       if (v === 'g') {
         grid = TRUE;
+        return;
+      }
+      if (v === 'gc') {
+        geocoding = TRUE;
         return;
       }
       if (v === 'l') {
@@ -735,19 +743,23 @@
         return;
       }
     });
-    return {
+    let result = {
       grid: grid,
       labels: labels,
       code: code,
       zoom: zoom,
-      mapTypeId: mapTypeId
+      mapTypeId: mapTypeId,
+      geocoding: geocoding
     };
+    // console.log('parseHash() -> ', result);
+    return result;
   };
 
   let updateState = () => {
     localStorage.setItem('pluscode', plusCodeInput.value);
     localStorage.setItem('zoom', map.getZoom());
     localStorage.setItem('mapTypeId', map.getMapTypeId());
+    localStorage.setItem('geocodingEnabled', geocodingCheckbox.checked ? TRUE : FALSE);
     if (gridControl && labelsControl) {
       localStorage.setItem('grid', gridControl.dataset.enabled);
       localStorage.setItem('labels', labelsControl.dataset.enabled);
@@ -765,7 +777,6 @@
   };
 
   let updateHash = () => {
-    console.log(parseHash());
     let parms = [
       plusCodeInput.value,
       map.getZoom() + 'z',
@@ -777,6 +788,9 @@
         parms.push('l');
       }
     }
+    if (geocodingEnabled()) {
+      parms.push('gc');
+    }
     window.location.hash = parms.join(';');
   };
 
@@ -787,9 +801,8 @@
     geocodeOLC();
   };
 
-  let hashChanged = () => {
-    console.log('hashChanged()');
-    let {code, zoom, grid, labels, mapTypeId} = parseHash();
+  let evaluateHash = () => {
+    let {code, zoom, grid, labels, mapTypeId, geocoding} = parseHash();
     if (code && zoom) {
       if (OLC.isValid(code)) {
         plusCodeInput.value = code;
@@ -801,8 +814,15 @@
       if (mapTypeId !== map.getMapTypeId()) {
         map.setMapTypeId(mapTypeId);
       }
+      if (geocoding === TRUE) {
+        olcInput.disabled = false;
+        geocodeOLC();
+      }
+      else {
+        olcInput.value = '';
+        olcInput.disabled = true;
+      }
       if (gridControl) {
-        console.log(gridControl, labelsControl, code, zoom, grid, labels, mapTypeId);
         gridControl.dataset.enabled = grid;
         updateLabelsControl();
         if (grid === TRUE) {
@@ -829,14 +849,7 @@
   };
 
   let toggleGeocoding = () => {
-    if (geocodingEnabled()) {
-      olcInput.disabled = false;
-      geocodeOLC();
-    }
-    else {
-      olcInput.value = '';
-      olcInput.disabled = true;
-    }
+    updateState();
   };
 
   let plusCodeChanged = () => {
@@ -947,7 +960,6 @@
   let geocodingEnabled = () => geocodingCheckbox.checked;
 
   let initUI = () => {
-    console.log(parseHash());
     clipboardCache = document.getElementById('clipboard-cache');
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
@@ -972,12 +984,11 @@
     geocodingCheckbox = document.getElementById('geocoding');
     geocodingCheckbox.addEventListener('change', toggleGeocoding);
     geocodingCheckbox.checked = true;
-    window.addEventListener('hashchange', hashChanged, true);
+    window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
-    convert2plus();
     document.getElementById('version').innerText = VERSION;
-    hashChanged();
+    evaluateHash();
   };
 
   let main = () => {
