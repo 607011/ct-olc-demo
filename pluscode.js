@@ -758,7 +758,6 @@
   let updateHash = () => {
     let parms = [
       plusCodeInput.value,
-      map.getZoom() + 'z',
       map.getMapTypeId(),
     ];
     if (gridControl && gridControl.dataset.enabled === TRUE) {
@@ -774,14 +773,14 @@
   };
 
   let evaluateHash = () => {
-    let {code, zoom, grid, labels, mapTypeId, geocoding} = parseHash();
-    if (code && zoom) {
+    let {code, grid, labels, mapTypeId, geocoding} = parseHash();
+    if (code) {
       if (OLC.isValid(code)) {
         plusCodeInput.value = code;
         updateMap();
-      }
-      if (zoom !== map.getZoom()) {
-        map.setZoom(zoom);
+        if (!map.getBounds().contains(marker.getPosition())) {
+          map.panTo(marker.getPosition());
+        }
       }
       if (mapTypeId !== map.getMapTypeId()) {
         map.setMapTypeId(mapTypeId);
