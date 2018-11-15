@@ -1,14 +1,15 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.2.2';
-  const DEFAULT_LAT = 52.3858125;
-  const DEFAULT_LON = 9.8096875;
+  const VERSION = '1.2.3';
+  const DEFAULT_PLUSCODE = '9F4F9RP5+8V ';
   const DEFAULT_ZOOM = 18;
-  const TRUE = '1';
+  const MAP_TYPES = ['roadmap', 'terrain', 'satellite', 'hybrid'];
+  const DEFAULT_MAPTYPE_ID = 'roadmap';
+  const TRUE = '1'; // needed for localStorage
   const FALSE = '0';
   let clipboardCache = null;
   let latInput = null;
-  let lonInput = null;
+  let lngInput = null;
   let plusCodeInput = null;
   let olcInput = null;
   let gridControl = null;
@@ -16,18 +17,15 @@
   let extraPrecisionEnabled = false;
   let map = null;
   let marker = null;
-  let area = null;
+  let olcArea = null;
   let showBubbleTimer = null;
   let activeBubble = null;
   let gridOverlay = null;
-  let mouseLatLng = null;
   let geocoder = null;
   let geocodingCheckbox = null;
-  let lastOLCLat;
-  let lastOLCLon;
-  let currentLat;
-  let currentLon;
-  let uiInitialized = false;
+  let mouseLatLng = null;
+  let lastOLCCoord = {lat: undefined, lng: undefined};
+  let lastZoom = DEFAULT_ZOOM;
 
 
   let OLC = (function() {
@@ -61,15 +59,16 @@
       offset: extraPrecisionEnabled => {
         let offset = {
           lat: GRID_SIZE_DEG / 2,
-          lon: GRID_SIZE_DEG / 2
+          lng: GRID_SIZE_DEG / 2
         };
         if (extraPrecisionEnabled) {
           offset.lat /= GRID_ROWS;
-          offset.lon /= GRID_COLS;
+          offset.lng /= GRID_COLS;
         }
         return offset;
       },
-      validate: code => {
+      // see OpenLocationCode.isValid() in https://github.com/google/open-location-code/blob/master/js/src/openlocationcode.js
+      validate: code => { 
         const PadRegex = new RegExp('(' + PADDING_CHARACTER + '+)', 'g');
         if (!code || typeof code !== 'string') {
           return 'Invalid type';
@@ -112,10 +111,10 @@
       isValid: code => {
         return OLC.validate(code) === '';
       },
-      encode: (lat_, lon_, codeLength = CODE_LENGTH_NORMAL) => {
-        let lat = parseFloat(lat_);
-        let lon = parseFloat(lon_);
-        if (isNaN(lat) || isNaN(lon))
+      encode: (coord, codeLength = CODE_LENGTH_NORMAL) => {
+        let lat = parseFloat(coord.lat);
+        let lng = parseFloat(coord.lng);
+        if (isNaN(lat) || isNaN(lng))
           return 'latitude or longitude is not a valid number';
 
         codeLength = Math.min(CODE_LENGTH_EXTRA, Math.max(codeLength, 2));
@@ -124,8 +123,8 @@
         lat = Math.min(90, Math.max(-90, lat));
 
         /* Normalize longitude to the range -180 to 180 */
-        while (lon < -180) lon += 360;
-        while (lon >= 180) lon -= 360;
+        while (lng < -180) lng += 360;
+        while (lng >= 180) lng -= 360;
 
         /* If the latitude is 90, compute the height of the area based
         /* on the requested code length and subtract the height from
@@ -140,7 +139,7 @@
         /* Add 90 to the latitude and 180 to the longitude to move
         /* them into the positive range */
         lat += 90;
-        lon += 180;
+        lng += 180;
 
         /* Encode up to five latitude and five longitude characters
         /* (10 in total) by converting each value into base 20
@@ -158,14 +157,14 @@
             return x - i * divisor;
           };
           lat = enc(lat);
-          lon = enc(lon);
+          lng = enc(lng);
         }
         if (codeLength < SEPARATOR_POSITION) {
           code = (code + '000000').substring(0, SEPARATOR_POSITION);
         }
         else if (codeLength === CODE_LENGTH_EXTRA) {
           let row = Math.floor((lat % GRID_ROWS) / GRID_SIZE_DEG * GRID_ROWS);
-          let col = Math.floor((lon % GRID_COLS) / GRID_SIZE_DEG * GRID_COLS);
+          let col = Math.floor((lng % GRID_COLS) / GRID_SIZE_DEG * GRID_COLS);
           code += ALPHABET[row * GRID_COLS + col];
         }
         /* Insert plus sign after eighth place */
@@ -179,11 +178,11 @@
         code = code.replace(SEPARATOR, '').replace(new RegExp(PADDING_CHARACTER + '+'), '').toUpperCase();
         let len = Math.min(code.length, CODE_LENGTH_NORMAL);
         let lat = 0;
-        let lon = 0;
+        let lng = 0;
         let resolutionIdx = 0;
         for (let i = 0; i < len; i += 2) {
           lat += ALPHABET.indexOf(code[i]) * RESOLUTION[resolutionIdx];
-          lon += ALPHABET.indexOf(code[i+1]) * RESOLUTION[resolutionIdx];
+          lng += ALPHABET.indexOf(code[i+1]) * RESOLUTION[resolutionIdx];
           ++resolutionIdx;
         }
         if (code.length === CODE_LENGTH_EXTRA) {
@@ -191,31 +190,24 @@
           let row = Math.floor(gridIdx / GRID_COLS);
           let col = gridIdx % GRID_COLS;
           lat += row * GRID_ROW_SIZE;
-          lon += col * GRID_COL_SIZE;
+          lng += col * GRID_COL_SIZE;
           return {
             lat: lat - 90 + GRID_ROW_SIZE / 2,
-            lon: lon - 180 + GRID_COL_SIZE / 2
+            lng: lng - 180 + GRID_COL_SIZE / 2
           };
         }
         return {
           lat: lat - 90 + RESOLUTION[resolutionIdx-1] / 2,
-          lon: lon - 180 + RESOLUTION[resolutionIdx-1] / 2
+          lng: lng - 180 + RESOLUTION[resolutionIdx-1] / 2
         };
       }
     };
   })();
 
-  let convert2plus = () => {
-    let codeLength = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
-    plusCodeInput.value = OLC.encode(latInput.value, lonInput.value, codeLength);
-  };
-
-  let geocodeOLC = () => {
-    let lat = currentLat;
-    let lon = currentLon;
-    if (geocodingEnabled()) {
+  let geocodeOLC = (coord) => {
+    if (geocodingEnabled) {
       geocoder.geocode({
-        latLng: {lat: lat, lng: lon}
+        latLng: coord
       }, (results, status) => {
         if (status === google.maps.GeocoderStatus.OK) {
           const ComponentTypes = [
@@ -265,51 +257,43 @@
     }
   };
 
+  let convert2plus = () => {
+    plusCodeInput.value = OLC.encode({lat: latInput.value, lng: lngInput.value},
+      extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL);
+  };
+
   let convert2coord = () => {
     let coord = OLC.decode(plusCodeInput.value);
     if (coord) {
-      let {lat, lon} = coord;
-      latInput.value = parseFloat(lat.toFixed(12));
-      lonInput.value = parseFloat(lon.toFixed(12));
+      latInput.value = parseFloat(coord.lat.toFixed(12));
+      lngInput.value = parseFloat(coord.lng.toFixed(12));
       localStorage.setItem('lat', latInput.value);
-      localStorage.setItem('lon', lonInput.value);
-      currentLat = lat;
-      currentLon = lon;
-      return {
-        lat: lat,
-        lon: lon
-      }
+      localStorage.setItem('lng', lngInput.value);
+      return coord;
     }
     return null;
   };
 
-  let placeMarker = (lat, lon) => {
-    // console.log('placeMarker()');
-    let latLng = new google.maps.LatLng(lat, lon);
+  let placeMarker = coord => {
     if (marker) {
       marker.setMap(null);
     }
     marker = new google.maps.Marker({
-      position: latLng,
+      position: coord,
       map: map
     });
-    if (!map.getBounds().contains(latLng)) {
-      map.panTo(latLng);
-    }
   };
 
-  let drawOLCArea = (lat_, lon_) => {
-    let codeLength = extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL;
-    let pluscode = OLC.encode(lat_, lon_, codeLength);
-    let {lat, lon} = OLC.decode(pluscode);
-    if (lat !== lastOLCLat || lon !== lastOLCLon) {
-      lastOLCLat = lat;
-      lastOLCLon = lon;
-      if (area) {
-        area.setMap(null);
+  let drawOLCArea = coord_ => {
+    let pluscode = OLC.encode(coord_, extraPrecisionEnabled ? OLC.LENGTH_EXTRA : OLC.LENGTH_NORMAL);
+    let coord = OLC.decode(pluscode);
+    if (coord.lat !== lastOLCCoord.lat || coord.lng !== lastOLCCoord.lng) {
+      lastOLCCoord = coord;
+      if (olcArea) {
+        olcArea.setMap(null);
       }
       let offset = OLC.offset(extraPrecisionEnabled);
-      area = new google.maps.Rectangle({
+      olcArea = new google.maps.Rectangle({
         clickable: false,
         strokeColor: '#e11',
         strokeOpacity: .8,
@@ -318,10 +302,10 @@
         fillOpacity: .3,
         map: map,
         bounds: {
-          north: lat - offset.lat,
-          south: lat + offset.lat,
-          east: lon + offset.lon,
-          west: lon - offset.lon
+          north: coord.lat - offset.lat,
+          south: coord.lat + offset.lat,
+          east: coord.lng + offset.lng,
+          west: coord.lng - offset.lng
         }
       });
     }
@@ -363,20 +347,48 @@
     return div;
   };
 
-  let initMap = () => {
-    map.addListener('maptypeid_changed', e => {
+  let initMap = (center, zoom, mapTypeId) => {
+    map = new google.maps.Map(document.getElementById('map'), {
+      center: center,
+      zoom: zoom,
+      mapTypeId: mapTypeId,
+      gestureHandling: 'greedy',
+      options: {
+        streetViewControl: false,
+        fullscreenControl: false,
+        styles: [
+          {
+            featureType: 'poi.business',
+            stylers: [{visibility: 'off'}]
+          },
+          {
+            featureType: 'transit',
+            elementType: 'labels.icon',
+            stylers: [{visibility: 'off'}]
+          }
+        ]
+      }
+    });
+    let boundsChangedHandler = map.addListener('bounds_changed', () => {
+      google.maps.event.removeListener(boundsChangedHandler);
+      evaluateHash();
+      if (!map.getBounds().contains(center)) {
+        map.panTo(center);
+      }
+    });
+    map.addListener('maptypeid_changed', () => {
       updateState();
     });
     map.addListener('click', e => {
       latInput.value = e.latLng.lat();
-      lonInput.value = e.latLng.lng();
+      lngInput.value = e.latLng.lng();
       convert2plus();
       convert2coord();
       updateState();
     });
     map.addListener('mousemove', e => {
       mouseLatLng = e.latLng;
-      drawOLCArea(e.latLng.lat(), e.latLng.lng());
+      drawOLCArea({lat: mouseLatLng.lat(), lng: mouseLatLng.lng()});
     });
     map.addListener('idle', () => {
       updateState();
@@ -423,9 +435,9 @@
       onAdd() {
         let self = this;
         function redraw() {
-          let doDraw = self._gridLines.length > 0;
+          let doRedraw = self._gridLines.length > 0;
           self._clear();
-          if (doDraw) {
+          if (doRedraw) {
             self._draw();
           }
         }
@@ -511,37 +523,38 @@
           }
         }
       }
-      _drawLabels(sw, ne, latGridSize, lonGridSize) {
+      _drawLabels(sw, ne, latGridSize, lngGridSize) {
         let dLat = (sw.lat() % latGridSize) + (latGridSize === 20 ? 10 : 0);
-        let dLon = sw.lng() % lonGridSize;
+        let dLon = sw.lng() % lngGridSize;
+        const RES = OLC.RESOLUTION;
         for (let lat = sw.lat() - dLat; lat < ne.lat(); lat += latGridSize) {
-          for (let lon = sw.lng() - dLon; lon < ne.lng(); lon += lonGridSize) {
-            let lo = this._llToPixels(new google.maps.LatLng({lat: lat, lng: lon}));
-            let hi = this._llToPixels(new google.maps.LatLng({lat: lat + latGridSize, lng: lon + lonGridSize}));
+          for (let lng = sw.lng() - dLon; lng < ne.lng(); lng += lngGridSize) {
+            let lo = this._llToPixels(new google.maps.LatLng({lat: lat, lng: lng}));
+            let hi = this._llToPixels(new google.maps.LatLng({lat: lat + latGridSize, lng: lng + lngGridSize}));
             let h = Math.abs(hi.y - lo.y);
             let w = Math.abs(hi.x - lo.x);
-            let code = OLC.encode(lat + latGridSize/2, lon + lonGridSize/2);
+            let code = OLC.encode({lat: lat + latGridSize/2, lng: lng + lngGridSize/2});
             let code1, code2, code3;
             switch (latGridSize) {
-              case OLC.RESOLUTION[0]: {
+              case RES[0]: {
                 code1 = code.substr(0, 2);
                 break;
               }
-              case OLC.RESOLUTION[1]: {
+              case RES[1]: {
                 code1 = code.substr(0, 4);
                 break;
               }
-              case OLC.RESOLUTION[2]: {
+              case RES[2]: {
                 code1 = code.substr(0, 4);
                 code2 = code.substr(4, 2);
                 break;
               }
-              case OLC.RESOLUTION[3]: {
+              case RES[3]: {
                 code1 = code.substr(0, 4);
                 code2 = code.substr(4, 4);
                 break;
               }
-              case OLC.RESOLUTION[4]: {
+              case RES[4]: {
                 code1 = code.substr(0, 4);
                 code2 = code.substr(4, 4);
                 code3 = code.substr(9, 2);
@@ -583,7 +596,7 @@
           }
         }
       }
-      _drawGrid(sw, ne, latGridSize, lonGridSize, sub) {
+      _drawGrid(sw, ne, latGridSize, lngGridSize, sub) {
         let stroke = this.strokeParams[sub ? 'minor' : 'major'];
         let polyLineOpts = {
           clickable: false,
@@ -592,11 +605,11 @@
           strokeWeight: stroke.weight,
           map: this.getMap()
         };
-        let dLon = sw.lng() % lonGridSize;
-        for (let lon = sw.lng() - dLon; lon < ne.lng(); lon += lonGridSize) {
+        let dLon = sw.lng() % lngGridSize;
+        for (let lng = sw.lng() - dLon; lng < ne.lng(); lng += lngGridSize) {
           polyLineOpts.path = [
-            { lat: sw.lat(), lng: lon },
-            { lat: ne.lat(), lng: lon },
+            { lat: sw.lat(), lng: lng },
+            { lat: ne.lat(), lng: lng },
           ];
           let line = new google.maps.Polyline(polyLineOpts);
           this._gridLines.push(line);
@@ -631,20 +644,21 @@
           let ne = bounds.getNorthEast();
           let sw = bounds.getSouthWest();
           let subGrid = false;
-          for (let resIdx = 0; resIdx < OLC.RESOLUTION.length; ++resIdx) {
-            let latGridSize = OLC.RESOLUTION[resIdx];
-            let lonGridSize = latGridSize;
-            let diametralEdge = new google.maps.LatLng(center.lat() + latGridSize, center.lng() + lonGridSize);
+          const RES = OLC.RESOLUTION;
+          for (let resIdx = 0; resIdx < RES.length; ++resIdx) {
+            let latGridSize = RES[resIdx];
+            let lngGridSize = latGridSize;
+            let diametralEdge = new google.maps.LatLng(center.lat() + latGridSize, center.lng() + lngGridSize);
             let left = this._llToPixels(center).x;
             let right = this._llToPixels(diametralEdge).x;
             let dist = right - left;
             if (dist > GRID_WIDTH_THRESHOLD_PX && dist < innerWidth) {
-              this._drawGrid(sw, ne, latGridSize, lonGridSize, subGrid);
+              this._drawGrid(sw, ne, latGridSize, lngGridSize, subGrid);
               if (subGrid) {
                 break;
               }
               else if (this._displayLabels) {
-                this._drawLabels(sw, ne, latGridSize, lonGridSize);
+                this._drawLabels(sw, ne, latGridSize, lngGridSize);
               }
               subGrid = true;
             }
@@ -654,8 +668,8 @@
           }
         }
       }
-      _llToPixels(coord) {
-        return this.getProjection().fromLatLngToDivPixel(coord);
+      _llToPixels(latLng) {
+        return this.getProjection().fromLatLngToDivPixel(latLng);
       }
     }
 
@@ -665,7 +679,7 @@
 
   let redrawOLCArea = () => {
     if (mouseLatLng !== null) {
-      drawOLCArea(mouseLatLng.lat(), mouseLatLng.lng());
+      drawOLCArea({lat: mouseLatLng.lat(), lng: mouseLatLng.lng()});
     }
   };
 
@@ -684,8 +698,9 @@
   };
 
   let parseHash = () => {
+    const ZoomRegex = new RegExp('^(\\d+)z$');
     let hash = window.location.hash.substr(1);
-    let code, zoom, grid = FALSE, labels = FALSE, mapTypeId=google.maps.MapTypeId.ROADMAP, geocoding = FALSE;
+    let code, zoom, grid = FALSE, labels = FALSE, mapTypeId = google.maps.MapTypeId.ROADMAP, geocoding = FALSE;
     hash.split(';').forEach(v => {
       if (OLC.isValid(v.toUpperCase())) {
         code = v;
@@ -703,14 +718,16 @@
         labels = TRUE;
         return;
       }
-      let zm = v.match(/^(\d+)z$/i);
+      let zm = ZoomRegex.exec(v);
       if (zm !== null && zm.length > 1) {
-        zoom = parseInt(zm[1]);
+        let z = parseInt(zm[1]);
+        if (!isNaN(z)) {
+          zoom = z;
+        }
         return;
       }
-      let tm = v.match(new RegExp('^(' + [google.maps.MapTypeId.SATELLITE, google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.TERRAIN, google.maps.MapTypeId.HYBRID].join('|') + ')$', 'i'));
-      if (tm !== null && tm.length > 1) {
-        mapTypeId = tm[1];
+      if (MAP_TYPES.includes(v)) {
+        mapTypeId = v;
         return;
       }
     });
@@ -730,21 +747,12 @@
     localStorage.setItem('pluscode', plusCodeInput.value);
     localStorage.setItem('zoom', map.getZoom());
     localStorage.setItem('mapTypeId', map.getMapTypeId());
-    localStorage.setItem('geocodingEnabled', geocodingCheckbox.checked ? TRUE : FALSE);
+    localStorage.setItem('geocoding', geocodingEnabled ? TRUE : FALSE);
     if (gridControl && labelsControl) {
       localStorage.setItem('grid', gridControl.dataset.enabled);
       localStorage.setItem('labels', labelsControl.dataset.enabled);
     }
     updateHash();
-  };
-
-  let updateLabelsControl = () => {
-    if (gridControl.dataset.enabled === FALSE) {
-      labelsControl.classList.add('disabled');
-    }
-    else {
-      labelsControl.classList.remove('disabled');
-    }
   };
 
   let updateHash = () => {
@@ -759,17 +767,10 @@
         parms.push('l');
       }
     }
-    if (geocodingEnabled()) {
+    if (geocodingEnabled) {
       parms.push('gc');
     }
     window.location.hash = parms.join(';');
-  };
-
-  let updateMap = () => {
-    let {lat, lon} = convert2coord();
-    placeMarker(lat, lon);
-    drawOLCArea(lat, lon);
-    geocodeOLC();
   };
 
   let evaluateHash = () => {
@@ -787,7 +788,6 @@
       }
       if (geocoding === TRUE) {
         olcInput.disabled = false;
-        geocodeOLC();
       }
       else {
         olcInput.value = '';
@@ -810,6 +810,22 @@
     }
   };
 
+  let updateMap = () => {
+    let coord = convert2coord();
+    placeMarker(coord);
+    drawOLCArea(coord);
+    geocodeOLC(coord);
+  };
+
+  let updateLabelsControl = () => {
+    if (gridControl.dataset.enabled === FALSE) {
+      labelsControl.classList.add('disabled');
+    }
+    else {
+      labelsControl.classList.remove('disabled');
+    }
+  };
+
   let toggleGrid = () => {
     updateLabelsControl();
     updateState();
@@ -824,7 +840,6 @@
   };
 
   let plusCodeChanged = () => {
-    console.log('plusCodeChanged()');
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
     if (validationResult.length === 0) {
@@ -840,7 +855,7 @@
 
   let latLonChanged = () => {
     localStorage.setItem('lat', latInput.value);
-    localStorage.setItem('lon', lonInput.value);
+    localStorage.setItem('lng', lngInput.value);
     convert2plus();
     plusCodeChanged();
     updateState();
@@ -914,7 +929,7 @@
   };
 
   let copyLatLonToClipboard = where => {
-    copyToClipboard(latInput.value + ' ' + lonInput.value);
+    copyToClipboard(latInput.value + ' ' + lngInput.value);
     showBubble(where, 'Breiten- und Längengrad in Zwischenablage kopiert.');
   };
 
@@ -928,84 +943,64 @@
     showBubble(olcInput, 'Open Location Code in Zwischenablage kopiert.');
   };
 
-  let geocodingEnabled = () => geocodingCheckbox.checked;
-
   let main = () => {
+    Object.defineProperty(window, 'geocodingEnabled', {
+      get: () => geocodingCheckbox.checked
+    });
     clipboardCache = document.getElementById('clipboard-cache');
     document.getElementById('version').innerText = VERSION;
-    let hashData = parseHash();
-    let lat = DEFAULT_LAT, lon = DEFAULT_LON, zoom = DEFAULT_ZOOM;
-    if (hashData.code) {
-      let coord = OLC.decode(hashData.code);
-      if (coord) {
-        lat = coord.lat;
-        lon = coord.lon;
-      }
-      else {
-        lat = parseFloat(localStorage.getItem('lat'));
-        lon = parseFloat(localStorage.getItem('lon'));
-        if (isNaN(lat) || isNaN(lon)) {
-          lat = DEFAULT_LAT;
-          lon = DEFAULT_LON;
-        }
-      }
-    }
-    if (hashData.zoom) {
-      zoom = hashData.zoom;
-    }
     plusCodeInput = document.getElementById('pluscode');
     plusCodeInput.addEventListener('change', plusCodeChanged, true);
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
-    latInput = document.getElementById('lat');
-    latInput.value = lat;
-    latInput.addEventListener('input', latLonChanged, true);
-    lonInput = document.getElementById('lon');
-    lonInput.value = lon;
-    lonInput.addEventListener('input', latLonChanged, true);
     enableLongPress(plusCodeInput, copyOLCToClipboard);
-    enableLongPress(latInput, () => { copyLatLonToClipboard(latInput); });
-    enableLongPress(lonInput, () => { copyLatLonToClipboard(lonInput); });
     enableMessageBubble(plusCodeInput);
+    let hashData = parseHash();
+    let stored = {
+      pluscode: localStorage.getItem('pluscode'),
+      zoom: localStorage.getItem('zoom'),
+      geocoding: localStorage.getItem('geocoding'),
+      mapTypeId: localStorage.getItem('mapTypeId'),
+      labels: localStorage.getItem('labels'),
+      grid: localStorage.getItem('grid')
+    };
+    let zoom = hashData.zoom
+    ? hashData.zoom
+    : (!isNaN(parseFloat(stored.zoom))
+      ? parseFloat(stored.zoom)
+      : DEFAULT_ZOOM);
+    let mapTypeId = hashData.mapTypeId
+    ? hashData.mapTypeId
+    : (MAP_TYPES.includes(stored.mapTypeId)
+      ? stored.mapTypeId
+      : DEFAULT_MAPTYPE_ID);
+    let storedPluscode = localStorage.getItem('pluscode');
+    let pluscode = hashData.code
+    ? hashData.code
+    : (OLC.isValid(storedPluscode)
+      ? storedPluscode
+      : DEFAULT_PLUSCODE);
+    plusCodeInput.value = pluscode;
+    let center = OLC.decode(pluscode);
+    latInput = document.getElementById('lat');
+    latInput.value = center.lat;
+    latInput.addEventListener('input', latLonChanged, true);
+    enableLongPress(latInput, () => { copyLatLonToClipboard(latInput); });
     enableMessageBubble(latInput);
-    enableMessageBubble(lonInput);
-    olcInput = document.getElementById('OLC');
-    enableMessageBubble(olcInput);
+    lngInput = document.getElementById('lng');
+    lngInput.value = center.lng;
+    lngInput.addEventListener('input', latLonChanged, true);
+    enableLongPress(lngInput, () => { copyLatLonToClipboard(lngInput); });
+    enableMessageBubble(lngInput);
+    olcInput = document.getElementById('olc');
     enableLongPress(olcInput, copyOLC2ToClipboard);
+    enableMessageBubble(olcInput);
     geocodingCheckbox = document.getElementById('geocoding');
     geocodingCheckbox.addEventListener('change', toggleGeocoding);
-    geocodingCheckbox.checked = true;
+    geocodingCheckbox.checked = hashData.geocoding === TRUE;
     window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
-    map = new google.maps.Map(document.getElementById('map'), {
-      center: {
-        lat: lat,
-        lng: lon
-      },
-      zoom: zoom,
-      gestureHandling: 'greedy',
-      options: {
-        streetViewControl: false,
-        fullscreenControl: false,
-        styles: [
-          {
-            featureType: 'poi.business',
-            stylers: [{visibility: 'off'}]
-          },
-          {
-            featureType: 'transit',
-            elementType: 'labels.icon',
-            stylers: [{visibility: 'off'}]
-          }
-        ]
-      }
-    });
-    initMap();
-    let boundsChangedHandler = map.addListener('bounds_changed', () => {
-      placeMarker(lat, lon);
-      drawOLCArea(lat, lon);
-      google.maps.event.removeListener(boundsChangedHandler);
-    });
+    initMap(center, zoom, mapTypeId);
   };
 
   window.addEventListener('load', main);
