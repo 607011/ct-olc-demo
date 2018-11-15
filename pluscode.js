@@ -69,7 +69,7 @@
       },
       // see OpenLocationCode.isValid() in https://github.com/google/open-location-code/blob/master/js/src/openlocationcode.js
       validate: code => { 
-        const PadRegex = new RegExp('(' + PADDING_CHARACTER + '+)', 'g');
+        const PadRegex = new RegExp(`(${PADDING_CHARACTER}+)`, 'g');
         if (!code || typeof code !== 'string') {
           return 'Invalid type';
         }
@@ -99,7 +99,7 @@
             return 'No symbols allowed after separator if padding is present';
           }
         }
-        code = code.replace(new RegExp('\\' + SEPARATOR + '+'), '').replace(new RegExp(PADDING_CHARACTER + '+'), '');
+        code = code.replace(new RegExp(`\\${SEPARATOR}+`), '').replace(new RegExp(`${PADDING_CHARACTER}+`), '');
         for (let i = 0, len = code.length; i < len; ++i) {
           let character = code.charAt(i).toUpperCase();
           if (character !== SEPARATOR && ALPHABET.indexOf(character) === -1) {
@@ -175,7 +175,7 @@
         if (!OLC.isValid(code)) {
           return null;
         }
-        code = code.replace(SEPARATOR, '').replace(new RegExp(PADDING_CHARACTER + '+'), '').toUpperCase();
+        code = code.replace(SEPARATOR, '').replace(new RegExp(`${PADDING_CHARACTER}+`), '').toUpperCase();
         let len = Math.min(code.length, CODE_LENGTH_NORMAL);
         let lat = 0;
         let lng = 0;
@@ -246,11 +246,11 @@
                     ? address.administrative_area_level_4
                     : 'unbekannt'))))
           );
-          olcInput.value = plusCodeInput.value.substring(4) + ' ' + locality + ', ' + address.country;
+          olcInput.value = `${plusCodeInput.value.substring(4)} ${locality}, ${address.country}`;
           olcInput.classList.remove('error');
         }
         else {
-          olcInput.value = 'Geocoding fehlgeschlagen: ' + status;
+          olcInput.value = `Geocoding fehlgeschlagen: ${status}`;
           olcInput.classList.add('error');
         }
       });
@@ -393,7 +393,7 @@
     });
 
     let additionalControls = document.createElement('div');
-    additionalControls.setAttribute('style', 'margin-top: 11px; border: 2px solid #fff; box-shadow: rgba(0, 0, 0, 0.3) 0px 1px 4px -1px; height: 35px; background-color: #fff')
+    additionalControls.className = 'additional-controls';
     let centerControl = makeControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#target" x="0" y="0"/></svg>',
         title: 'Auf Markierung zentrieren',
@@ -488,7 +488,7 @@
           case google.maps.MapTypeId.SATELLITE:
             return google.maps.MapTypeId.SATELLITE;
           default:
-            throw 'Illegal map type ID: "' + this.getMap().getMapTypeId();
+            throw `Illegal map type ID: ${this.getMap().getMapTypeId()}`;
         }
       }
       get strokeParams() {
@@ -563,32 +563,26 @@
             if (code1) {
               let fontSize = Math.floor(w / code1.length / 1.2);
               if (fontSize > 6) {
-                html = '<span class="' + this._code1Class +  ' ' + this.mapTypeId +
-                '" style="font-size: ' + fontSize + 'px">' +
-                code1 + '</span>';
+                html = `<span class="${this._code1Class} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code1}</span>`;
               }
             }
             if (code2) {
               let fontSize = Math.floor(w / code2.length / 1.6);
               if (fontSize > 6) {
-                html += '<span class="' + this._code2Class + ' ' + this.mapTypeId + '" ' +
-                'style="font-size: ' + fontSize + 'px">' + code2 + '</span>';
+                html += `<span class="${this._code2Class} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code2}</span>`;
               }
             }
             if (code3) {
               let fontSize = Math.floor(w / code3.length / 3.2);
               if (fontSize > 6) {
-                html += '<span class="' + this._code3Class + ' ' + this.mapTypeId + '" ' +
-                'style="font-size: ' + fontSize + 'px">' + code3 + '</span>';
+                html += `<span class="${this._code3Class} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code3}</span>`;
               }
             }
             if (html !== '') {
               let div = document.createElement('div');
               div.innerHTML = html;
               div.className = this._labelClass;
-              div.setAttribute('style', 'position: absolute;' +
-                'left: ' + lo.x + 'px; top: ' + (lo.y - h) + 'px;' + 
-                'width: ' + w + 'px; height: ' + h + 'px;');
+              div.setAttribute('style', `position: absolute; left: ${lo.x}px; top: ${lo.y - h}px; width: ${w}px; height: ${h}px`);
               this.getPanes().overlayLayer.appendChild(div);
             }
           }
