@@ -1,6 +1,6 @@
 (function(window) {
   'use strict';
-  const VERSION = '1.2.3';
+  const VERSION = '1.2.4';
   const DEFAULT_PLUSCODE = '9F4F9RP5+8V';
   const DEFAULT_ZOOM = 18;
   const MAP_TYPES = ['roadmap', 'terrain', 'satellite', 'hybrid'];
