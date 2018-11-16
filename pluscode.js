@@ -316,35 +316,45 @@
     document.execCommand('copy');
   };
 
-  let makeControl = (params = {opts: {enabled: TRUE}}) => {
-    let div = document.createElement('div');
-    div.innerHTML = params.contents;
-    div.className = 'map-control clickable';
-    div.index = 1;
-    params.opts = params.opts || {};
-    Object.keys(params.opts).forEach(key => {
-      div.dataset[key] = params.opts[key];
-    });
-    if (params.title) {
-      div.title = params.title;
-    }
-    if (params.opts.disabled === TRUE) {
-      div.classList.add('disabled');
-    }
-    div.addEventListener('click', () => {
-      if (div.dataset.hasOwnProperty('enabled')) {
-        div.dataset.enabled = div.dataset.enabled === TRUE ? FALSE : TRUE;
-        if (div.dataset.enabled === TRUE) {
-          div.classList.add('enabled');
-        }
-        else {
-          div.classList.remove('enabled');
-        }
+  class MapControl {
+    constructor(params) {
+      this._div = document.createElement('div');
+      this._div.innerHTML = params.contents;
+      this._div.className = 'map-control clickable';
+      this._div.index = 1;
+      params.opts = params.opts || {};
+      Object.keys(params.opts).forEach(function(key) {
+        this._div.dataset[key] = params.opts[key];
+      }.bind(this));
+      if (params.title) {
+        this._div.title = params.title;
       }
-      params.callback.call();
-    });
-    return div;
-  };
+      if (params.opts.disabled === TRUE) {
+        this._div.classList.add('disabled');
+      }
+      this._div.addEventListener('click', () => {
+        if (this._div.dataset.hasOwnProperty('enabled')) {
+          this.toggleEnabled();
+        }
+        params.callback.call();
+      });  
+    }
+    toggleEnabled() {
+      this._div.dataset.enabled = this._div.dataset.enabled === TRUE ? FALSE : TRUE;
+      if (this._div.dataset.enabled === TRUE) {
+        this._div.classList.add('enabled');
+      }
+      else {
+        this._div.classList.remove('enabled');
+      }
+    }
+    get element() {
+      return this._div;
+    }
+    get data() {
+      return this._div.dataset;
+    }
+  }
 
   let initMap = (center, zoom, mapTypeId) => {
     map = new google.maps.Map(document.getElementById('map'), {
@@ -395,33 +405,39 @@
 
     let additionalControls = document.createElement('div');
     additionalControls.className = 'additional-controls';
-    let centerControl = makeControl({
+    let centerControl = new MapControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#target" x="0" y="0"/></svg>',
         title: 'Auf Markierung zentrieren',
         callback: () => {
           map.panTo(marker.getPosition());
         }
       });
-    additionalControls.appendChild(centerControl);
+    additionalControls.appendChild(centerControl.element);
 
-    gridControl = makeControl({
+    gridControl = new MapControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#grid" x="0" y="0"/></svg>',
         title: 'Gitter ein-/ausschalten',
         callback: () => {
           updateLabelsControl();
           updateState();
+        },
+        opts: {
+          enabled: FALSE
         }
       });
-    additionalControls.appendChild(gridControl);
+    additionalControls.appendChild(gridControl.element);
 
-    labelsControl = makeControl({
+    labelsControl = new MapControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#labels" x="0" y="0"/></svg>',
         title: 'Beschriftung ein-/ausschalten',
         callback: () => {
           updateState();
+        },
+        opts: {
+          enabled: FALSE
         }
       });
-    additionalControls.appendChild(labelsControl);
+    additionalControls.appendChild(labelsControl.element);
 
     map.controls[google.maps.ControlPosition.TOP_LEFT].push(additionalControls);
 
@@ -534,12 +550,11 @@
         let dLon = sw.lng() % lngGridSize;
         const RES = OLC.RESOLUTION;
         let makeSpan = (className, w, fontScale, code) => {
-          let html = '';
           if (code) {
-            let fontSize = Math.floor(w / code.length * fontScale);
-            html = fontSize < 7 ? '' : `<span class="${className} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code}</span>`;
+            let fontSize = Math.round(w / code.length * fontScale);
+            return fontSize < 7 ? '' : `<span class="${className} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code}</span>`;
           }
-          return html;
+          return '';
         }
         for (let lat = sw.lat() - dLat; lat < ne.lat(); lat += latGridSize) {
           for (let lng = sw.lng() - dLon; lng < ne.lng(); lng += lngGridSize) {
@@ -739,8 +754,8 @@
     localStorage.setItem('mapTypeId', map.getMapTypeId());
     localStorage.setItem('geocoding', geocodingEnabled ? TRUE : FALSE);
     if (gridControl && labelsControl) {
-      localStorage.setItem('grid', gridControl.dataset.enabled);
-      localStorage.setItem('labels', labelsControl.dataset.enabled);
+      localStorage.setItem('grid', gridControl.data.enabled);
+      localStorage.setItem('labels', labelsControl.data.enabled);
     }
     updateHash();
   };
@@ -750,9 +765,9 @@
       plusCodeInput.value,
       map.getMapTypeId(),
     ];
-    if (gridControl && gridControl.dataset.enabled === TRUE) {
+    if (gridControl && gridControl.data.enabled === TRUE) {
       parms.push('g');
-      if (labelsControl && labelsControl.dataset.enabled === TRUE) {
+      if (labelsControl && labelsControl.data.enabled === TRUE) {
         parms.push('l');
       }
     }
@@ -786,10 +801,10 @@
         geocodeOLC(marker.getPosition());
       }
       if (gridControl) {
-        gridControl.dataset.enabled = grid;
+        gridControl.data.enabled = grid;
         updateLabelsControl();
         if (grid === TRUE) {
-          labelsControl.dataset.enabled = labels;
+          labelsControl.data.enabled = labels;
           gridOverlay.enableLabels(labels === TRUE);
           if (labels === FALSE) {
             gridOverlay.show();
@@ -810,11 +825,11 @@
   };
 
   let updateLabelsControl = () => {
-    if (gridControl.dataset.enabled === FALSE) {
-      labelsControl.classList.add('disabled');
+    if (gridControl.data.enabled === FALSE) {
+      labelsControl.element.classList.add('disabled');
     }
     else {
-      labelsControl.classList.remove('disabled');
+      labelsControl.element.classList.remove('disabled');
     }
   };
 
