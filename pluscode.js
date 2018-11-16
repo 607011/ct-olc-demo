@@ -398,21 +398,28 @@
     let centerControl = makeControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#target" x="0" y="0"/></svg>',
         title: 'Auf Markierung zentrieren',
-        callback: () => map.panTo(marker.getPosition())
+        callback: () => {
+          map.panTo(marker.getPosition());
+        }
       });
     additionalControls.appendChild(centerControl);
 
     gridControl = makeControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#grid" x="0" y="0"/></svg>',
         title: 'Gitter ein-/ausschalten',
-        callback: toggleGrid
+        callback: () => {
+          updateLabelsControl();
+          updateState();
+        }
       });
     additionalControls.appendChild(gridControl);
 
     labelsControl = makeControl({
         contents: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 35 35"><use xlink:href="#labels" x="0" y="0"/></svg>',
         title: 'Beschriftung ein-/ausschalten',
-        callback: toggleLabels
+        callback: () => {
+          updateState();
+        }
       });
     additionalControls.appendChild(labelsControl);
 
@@ -526,6 +533,14 @@
         let dLat = (sw.lat() % latGridSize) + (latGridSize === 20 ? 10 : 0);
         let dLon = sw.lng() % lngGridSize;
         const RES = OLC.RESOLUTION;
+        let makeSpan = (className, w, fontScale, code) => {
+          let html = '';
+          if (code) {
+            let fontSize = Math.floor(w / code.length * fontScale);
+            html = fontSize < 7 ? '' : `<span class="${className} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code}</span>`;
+          }
+          return html;
+        }
         for (let lat = sw.lat() - dLat; lat < ne.lat(); lat += latGridSize) {
           for (let lng = sw.lng() - dLon; lng < ne.lng(); lng += lngGridSize) {
             let lo = this._llToPixels(new google.maps.LatLng({lat: lat, lng: lng}));
@@ -560,26 +575,8 @@
                 break;
               }
             }
-            let html = '';
-            if (code1) {
-              let fontSize = Math.floor(w / code1.length / 1.2);
-              if (fontSize > 6) {
-                html = `<span class="${this._code1Class} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code1}</span>`;
-              }
-            }
-            if (code2) {
-              let fontSize = Math.floor(w / code2.length / 1.6);
-              if (fontSize > 6) {
-                html += `<span class="${this._code2Class} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code2}</span>`;
-              }
-            }
-            if (code3) {
-              let fontSize = Math.floor(w / code3.length / 3.2);
-              if (fontSize > 6) {
-                html += `<span class="${this._code3Class} ${this.mapTypeId}" style="font-size: ${fontSize}px">${code3}</span>`;
-              }
-            }
-            if (html !== '') {
+            let html = makeSpan(this._code1Class, w, .83, code1) + makeSpan(this._code2Class, w, .63, code2) + makeSpan(this._code3Class, w, .32, code3);
+            if (html.length > 0) {
               let div = document.createElement('div');
               div.innerHTML = html;
               div.className = this._labelClass;
@@ -821,19 +818,6 @@
     }
   };
 
-  let toggleGrid = () => {
-    updateLabelsControl();
-    updateState();
-  };
-
-  let toggleLabels = () => {
-    updateState();
-  };
-
-  let toggleGeocoding = () => {
-    updateState();
-  };
-
   let plusCodeChanged = () => {
     let code = plusCodeInput.value.toUpperCase();
     let validationResult = OLC.validate(code);
@@ -987,7 +971,7 @@
     enableMessageBubble(olcOutput);
     geocodingCheckbox = document.getElementById('geocoding');
     geocodingEnabled = hashData.geocoding === TRUE;
-    geocodingCheckbox.addEventListener('change', toggleGeocoding);
+    geocodingCheckbox.addEventListener('change', () => { updateState(); });
     window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
