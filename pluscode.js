@@ -43,6 +43,8 @@
     const SEPARATOR = '+';
     const SEPARATOR_POSITION = 8;
     const PADDING_CHARACTER = '0';
+    const PADDING_REGEX = new RegExp(`(${PADDING_CHARACTER}+)`, 'g');
+    const SEPARATOR_REGEX = new RegExp(`\\${SEPARATOR}+`);
 
     return {
       RESOLUTION: RESOLUTION,
@@ -68,8 +70,7 @@
         return offset;
       },
       // see OpenLocationCode.isValid() in https://github.com/google/open-location-code/blob/master/js/src/openlocationcode.js
-      validate: code => { 
-        const PadRegex = new RegExp(`(${PADDING_CHARACTER}+)`, 'g');
+      validate: code => {
         if (!code || typeof code !== 'string') {
           return 'Invalid type';
         }
@@ -91,7 +92,7 @@
           if (padPos < 3) {
             return 'Invalid padding';
           }
-          var padMatch = code.match(PadRegex);
+          var padMatch = code.match(PADDING_REGEX);
           if (padMatch.length > 1 || padMatch[0].length % 2 === 1 || padMatch[0].length > SEPARATOR_POSITION - 2) {
             return 'Invalid padding';
           }
@@ -99,7 +100,7 @@
             return 'No symbols allowed after separator if padding is present';
           }
         }
-        code = code.replace(new RegExp(`\\${SEPARATOR}+`), '').replace(PadRegex, '');
+        code = code.replace(SEPARATOR_REGEX, '').replace(PADDING_REGEX, '');
         for (let i = 0, len = code.length; i < len; ++i) {
           let character = code.charAt(i).toUpperCase();
           if (character !== SEPARATOR && ALPHABET.indexOf(character) === -1) {
@@ -175,7 +176,7 @@
         if (!OLC.isValid(code)) {
           return null;
         }
-        code = code.replace(SEPARATOR, '').replace(new RegExp(`${PADDING_CHARACTER}+`), '').toUpperCase();
+        code = code.replace(SEPARATOR, '').replace(PADDING_REGEX, '').toUpperCase();
         let len = Math.min(code.length, CODE_LENGTH_NORMAL);
         let lat = 0;
         let lng = 0;
