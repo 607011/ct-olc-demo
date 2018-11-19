@@ -1,12 +1,13 @@
 (function(window) {
   'use strict';
   const VERSION = '1.2.4';
-  const DEFAULT_PLUSCODE = '9F4F9RP5+8V';
-  const DEFAULT_ZOOM = 18;
-  const MAP_TYPES = ['roadmap', 'terrain', 'satellite', 'hybrid'];
-  const DEFAULT_MAPTYPE_ID = 'roadmap';
   const TRUE = '1'; // needed for localStorage
   const FALSE = '0';
+  const MAP_TYPES = ['roadmap', 'terrain', 'satellite', 'hybrid'];
+  const DEFAULT_PLUSCODE = '9F4F9RP5+8V';
+  const DEFAULT_ZOOM = 18;
+  const DEFAULT_MAPTYPE_ID = 'roadmap';
+  const DEFAULT_GEOCODING = FALSE;
   let clipboardCache = null;
   let latInput = null;
   let lngInput = null;
@@ -337,7 +338,7 @@
           this.toggleEnabled();
         }
         params.callback.call();
-      });  
+      });
     }
     toggleEnabled() {
       this._div.dataset.enabled = this._div.dataset.enabled === TRUE ? FALSE : TRUE;
@@ -793,12 +794,12 @@
       if (geocoding === TRUE) {
         olcOutput.disabled = false;
         geocodingEnabled = true;
+        geocodeOLC(marker.getPosition());
       }
       else {
         olcOutput.value = '';
         olcOutput.disabled = true;
         geocodingEnabled = false;
-        geocodeOLC(marker.getPosition());
       }
       if (gridControl) {
         gridControl.data.enabled = grid;
@@ -969,6 +970,11 @@
     : (OLC.isValid(stored.pluscode)
       ? stored.pluscode
       : DEFAULT_PLUSCODE);
+    let geocoding = hashData.geocoding
+    ? hashData.geocoding
+    : (stored.geocoding === TRUE
+      ? stored.geocoding
+      : DEFAULT_GEOCODING);
     plusCodeInput.value = pluscode;
     let center = OLC.decode(pluscode);
     latInput = document.getElementById('lat');
@@ -985,7 +991,7 @@
     enableLongPress(olcOutput, copyOLC2ToClipboard);
     enableMessageBubble(olcOutput);
     geocodingCheckbox = document.getElementById('geocoding');
-    geocodingEnabled = hashData.geocoding === TRUE;
+    geocodingEnabled = geocoding;
     geocodingCheckbox.addEventListener('change', () => { updateState(); });
     window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
