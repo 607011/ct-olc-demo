@@ -7,7 +7,7 @@
   const DEFAULT_PLUSCODE = '9F4F9RP5+8V';
   const DEFAULT_ZOOM = 18;
   const DEFAULT_MAPTYPE_ID = 'roadmap';
-  const DEFAULT_GEOCODING = FALSE;
+  const DEFAULT_GEOCODING = false;
   let clipboardCache = null;
   let latInput = null;
   let lngInput = null;
@@ -325,24 +325,27 @@
       this._div.index = 1;
       params.opts = params.opts || {};
       Object.keys(params.opts).forEach(function(key) {
-        this._div.dataset[key] = params.opts[key];
+        this.data[key] = params.opts[key];
       }.bind(this));
       if (params.title) {
         this._div.title = params.title;
       }
-      if (params.opts.disabled === TRUE) {
+      if (params.opts.enabled) {
+        this._div.classList.add('enabled');
+      }
+      if (params.opts.disabled) {
         this._div.classList.add('disabled');
       }
       this._div.addEventListener('click', () => {
-        if (this._div.dataset.hasOwnProperty('enabled')) {
+        if (this.data.hasOwnProperty('enabled')) {
           this.toggleEnabled();
         }
         params.callback.call();
       });
     }
     toggleEnabled() {
-      this._div.dataset.enabled = this._div.dataset.enabled === TRUE ? FALSE : TRUE;
-      if (this._div.dataset.enabled === TRUE) {
+      this._div.dataset.enabled = this._div.dataset.enabled === 'true' ? 'false' : 'true';
+      if (this._div.dataset.enabled === 'true') {
         this._div.classList.add('enabled');
       }
       else {
@@ -355,13 +358,19 @@
     get data() {
       return this._div.dataset;
     }
+    get enabled() {
+      return this.data.enabled === 'true';
+    }
+    set enabled(enabled) {
+      this.data.enabled = enabled;
+    }
   }
 
-  let initMap = (center, zoom, mapTypeId) => {
+  let initMap = (params) => {
     map = new google.maps.Map(document.getElementById('map'), {
-      center: center,
-      zoom: zoom,
-      mapTypeId: mapTypeId,
+      center: params.center,
+      zoom: params.zoom,
+      mapTypeId: params.mapTypeId,
       gestureHandling: 'greedy',
       options: {
         streetViewControl: false,
@@ -382,8 +391,8 @@
     let boundsChangedHandler = map.addListener('bounds_changed', () => {
       google.maps.event.removeListener(boundsChangedHandler);
       evaluateHash();
-      if (!map.getBounds().contains(center)) {
-        map.panTo(center);
+      if (!map.getBounds().contains(params.center)) {
+        map.panTo(params.center);
       }
     });
     map.addListener('maptypeid_changed', () => {
@@ -423,7 +432,7 @@
           updateState();
         },
         opts: {
-          enabled: FALSE
+          enabled: params.grid
         }
       });
     additionalControls.appendChild(gridControl.element);
@@ -435,7 +444,7 @@
           updateState();
         },
         opts: {
-          enabled: FALSE
+          enabled: params.labels
         }
       });
     additionalControls.appendChild(labelsControl.element);
@@ -706,22 +715,22 @@
   let parseHash = () => {
     const ZoomRegex = new RegExp('^(\\d+)z$');
     let hash = window.location.hash.substr(1);
-    let code, zoom, grid = FALSE, labels = FALSE, mapTypeId = google.maps.MapTypeId.ROADMAP, geocoding = FALSE;
+    let code, zoom, grid, labels, mapTypeId, geocoding;
     hash.split(';').forEach(v => {
       if (OLC.isValid(v.toUpperCase())) {
         code = v;
         return;
       }
-      if (v === 'g') {
-        grid = TRUE;
+      if (v === 'gc') {
+        geocoding = true;
         return;
       }
-      if (v === 'gc') {
-        geocoding = TRUE;
+      if (v === 'g') {
+        grid = true;
         return;
       }
       if (v === 'l') {
-        labels = TRUE;
+        labels = true;
         return;
       }
       let zm = ZoomRegex.exec(v);
@@ -745,7 +754,6 @@
       mapTypeId: mapTypeId,
       geocoding: geocoding
     };
-    // console.log('parseHash() -> ', result);
     return result;
   };
 
@@ -755,8 +763,8 @@
     localStorage.setItem('mapTypeId', map.getMapTypeId());
     localStorage.setItem('geocoding', geocodingEnabled ? TRUE : FALSE);
     if (gridControl && labelsControl) {
-      localStorage.setItem('grid', gridControl.data.enabled);
-      localStorage.setItem('labels', labelsControl.data.enabled);
+      localStorage.setItem('grid', gridControl.enabled ? TRUE : FALSE);
+      localStorage.setItem('labels', labelsControl.enabled ? TRUE : FALSE);
     }
     updateHash();
   };
@@ -766,9 +774,9 @@
       plusCodeInput.value,
       map.getMapTypeId(),
     ];
-    if (gridControl && gridControl.data.enabled === TRUE) {
+    if (gridControl && gridControl.enabled) {
       parms.push('g');
-      if (labelsControl && labelsControl.data.enabled === TRUE) {
+      if (labelsControl && labelsControl.enabled) {
         parms.push('l');
       }
     }
@@ -791,7 +799,7 @@
       if (mapTypeId !== map.getMapTypeId()) {
         map.setMapTypeId(mapTypeId);
       }
-      if (geocoding === TRUE) {
+      if (geocoding) {
         olcOutput.disabled = false;
         geocodingEnabled = true;
         geocodeOLC(marker.getPosition());
@@ -802,12 +810,12 @@
         geocodingEnabled = false;
       }
       if (gridControl) {
-        gridControl.data.enabled = grid;
+        gridControl.enabled = grid;
         updateLabelsControl();
-        if (grid === TRUE) {
-          labelsControl.data.enabled = labels;
-          gridOverlay.enableLabels(labels === TRUE);
-          if (labels === FALSE) {
+        if (grid) {
+          labelsControl.enabled = labels;
+          gridOverlay.enableLabels(labels);
+          if (!labels) {
             gridOverlay.show();
           }
         }
@@ -826,11 +834,11 @@
   };
 
   let updateLabelsControl = () => {
-    if (gridControl.data.enabled === FALSE) {
-      labelsControl.element.classList.add('disabled');
+    if (gridControl.enabled) {
+      labelsControl.element.classList.remove('disabled');
     }
     else {
-      labelsControl.element.classList.remove('disabled');
+      labelsControl.element.classList.add('disabled');
     }
   };
 
@@ -948,35 +956,38 @@
     plusCodeInput.addEventListener('input', plusCodeChanged, true);
     enableLongPress(plusCodeInput, copyOLCToClipboard);
     enableMessageBubble(plusCodeInput);
-    let hashData = parseHash();
+    let appData = parseHash();
     let stored = {
       zoom: localStorage.getItem('zoom'),
       pluscode: localStorage.getItem('pluscode'),
-      geocoding: localStorage.getItem('geocoding'),
+      geocoding: localStorage.getItem('geocoding') === TRUE,
+      grid: localStorage.getItem('grid') === TRUE,
+      labels: localStorage.getItem('labels') === TRUE,
       mapTypeId: localStorage.getItem('mapTypeId')
     };
-    let zoom = hashData.zoom
-    ? hashData.zoom
+    appData.zoom = appData.zoom
+    ? appData.zoom
     : (!isNaN(+stored.zoom)
       ? +stored.zoom
       : DEFAULT_ZOOM);
-    let mapTypeId = hashData.mapTypeId
-    ? hashData.mapTypeId
+    appData.mapTypeId = appData.mapTypeId
+    ? appData.mapTypeId
     : (MAP_TYPES.includes(stored.mapTypeId)
       ? stored.mapTypeId
       : DEFAULT_MAPTYPE_ID);
-    let pluscode = hashData.code
-    ? hashData.code
+    appData.pluscode = appData.code
+    ? appData.code
     : (OLC.isValid(stored.pluscode)
       ? stored.pluscode
       : DEFAULT_PLUSCODE);
-    let geocoding = hashData.geocoding
-    ? hashData.geocoding
-    : (stored.geocoding === TRUE
-      ? stored.geocoding
+    appData.geocoding = appData.geocoding
+    ? appData.geocoding
+    : (stored.geocoding
+      ? true
       : DEFAULT_GEOCODING);
-    plusCodeInput.value = pluscode;
-    let center = OLC.decode(pluscode);
+    plusCodeInput.value = appData.pluscode;
+    let center = OLC.decode(appData.pluscode);
+    appData.center = center;
     latInput = document.getElementById('lat');
     latInput.value = center.lat;
     latInput.addEventListener('input', latLonChanged, true);
@@ -996,7 +1007,7 @@
     window.addEventListener('hashchange', evaluateHash, true);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
-    initMap(center, zoom, mapTypeId);
+    initMap(appData);
   };
 
   window.addEventListener('load', main);
