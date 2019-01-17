@@ -2,6 +2,8 @@
 
 Demo website to convert geographic coordinates (latitude and longitude in decimal notation) into an [Open Location Code](https://en.wikipedia.org/wiki/Open_Location_Code) (a.k.a. [plus code](https://plus.codes/)) and vice versa.
 
+![](https://img.shields.io/github/license/ola-ct/ct-olc-demo.svg)
+
 ## Installation
 
 Copy HTML and JS files to a directory on your web server. Open that directory in a browser. Explore how the algorithm works by clicking on the Google Maps map.
